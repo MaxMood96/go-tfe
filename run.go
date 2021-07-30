@@ -105,6 +105,7 @@ type Run struct {
 	Status                 RunStatus            `jsonapi:"attr,status"`
 	StatusTimestamps       *RunStatusTimestamps `jsonapi:"attr,status-timestamps"`
 	TargetAddrs            []string             `jsonapi:"attr,target-addrs,omitempty"`
+	Variables              []*RunVariable       `jsonapi:"attr,variables"`
 
 	// Relations
 	Apply                *Apply                `jsonapi:"relation,apply"`
@@ -161,6 +162,12 @@ type RunListOptions struct {
 	// A list of relations to include. See available resources:
 	// https://www.terraform.io/docs/cloud/api/run.html#available-related-resources
 	Include *string `url:"include"`
+}
+
+// RunVariable represents a variable that can be applied to a run
+type RunVariable struct {
+	Key   string `jsonapi:"attr,key"`
+	Value string `jsonapi:"attr,value"`
 }
 
 // List all the runs of the given workspace.
@@ -232,6 +239,8 @@ type RunCreateOptions struct {
 	// (destroys and then re-creates) the objects specified by the given
 	// resource addresses.
 	ReplaceAddrs []string `jsonapi:"attr,replace-addrs,omitempty"`
+
+	Variables []*RunVariable `jsonapi:"attr,variables,omitempty"`
 }
 
 func (o RunCreateOptions) valid() error {

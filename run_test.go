@@ -157,6 +157,45 @@ func TestRunsCreate(t *testing.T) {
 		assert.Equal(t, *options.Refresh, r.Refresh)
 		assert.Equal(t, options.ReplaceAddrs, r.ReplaceAddrs)
 		assert.Equal(t, options.TargetAddrs, r.TargetAddrs)
+		assert.Nil(t, r.Variables)
+	})
+
+	t.Run("with variables", func(t *testing.T) {
+		vars := []*RunVariable{
+			{
+				Key:   "test_variable",
+				Value: "Hello, World!",
+			},
+		}
+
+		options := RunCreateOptions{
+			Message:   String("yo"),
+			Workspace: wTest,
+			Variables: vars,
+		}
+
+		r, err := client.Runs.Create(ctx, options)
+		require.NoError(t, err)
+		assert.NotNil(t, r.Variables)
+		assert.Equal(t, 1, len(r.Variables))
+	})
+
+	t.Run("with incomplete variables", func(t *testing.T) {
+		vars := []*RunVariable{
+			{
+				Key: "test_variable",
+				// Value is missing but required
+			},
+		}
+
+		options := RunCreateOptions{
+			Message:   String("yo"),
+			Workspace: wTest,
+			Variables: vars,
+		}
+
+		_, err := client.Runs.Create(ctx, options)
+		assert.Equal(t, err, ErrUnprocessableEntity)
 	})
 }
 

@@ -1,0 +1,20 @@
+{
+  "data": {
+    "type": "runs",
+    "relationships": {
+      "workspace": {
+        "data": {
+          "type": "workspaces",
+          "id": "ws-ieL7M1UgZ1wMgKXD"
+        }
+      }
+    },
+    "attributes": {
+      "variables": [{
+        "key": "run_variable",
+        "value": "hello, santa",
+        "category": "terraform"
+      }]
+    }
+  }
+}
