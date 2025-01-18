@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -12,7 +15,7 @@ var _ OrganizationTags = (*organizationTags)(nil)
 // OrganizationMemberships describes all the list of tags used with all resources across the organization.
 //
 // TFE API docs:
-// https://www.terraform.io/cloud-docs/api-docs/organization-tags
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/organization-tags
 type OrganizationTags interface {
 	// List all tags within an organization
 	List(ctx context.Context, organization string, options *OrganizationTagsListOptions) (*OrganizationTagsList, error)
@@ -53,6 +56,9 @@ type OrganizationTagsListOptions struct {
 	ListOptions
 	// Optional:
 	Filter string `url:"filter[exclude][taggable][id],omitempty"`
+
+	// Optional: A search query string. Organization tags are searchable by name likeness.
+	Query string `url:"q,omitempty"`
 }
 
 // OrganizationTagsDeleteOptions represents the request body for deleting a tag in an organization
@@ -81,14 +87,14 @@ func (s *organizationTags) List(ctx context.Context, organization string, option
 		return nil, ErrInvalidOrg
 	}
 
-	u := fmt.Sprintf("organizations/%s/tags", url.QueryEscape(organization))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("organizations/%s/tags", url.PathEscape(organization))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	tags := &OrganizationTagsList{}
-	err = s.client.do(ctx, req, tags)
+	err = req.Do(ctx, tags)
 	if err != nil {
 		return nil, err
 	}
@@ -106,18 +112,18 @@ func (s *organizationTags) Delete(ctx context.Context, organization string, opti
 		return err
 	}
 
-	u := fmt.Sprintf("organizations/%s/tags", url.QueryEscape(organization))
+	u := fmt.Sprintf("organizations/%s/tags", url.PathEscape(organization))
 	var tagsToRemove []*tagID
 	for _, id := range options.IDs {
 		tagsToRemove = append(tagsToRemove, &tagID{ID: id})
 	}
 
-	req, err := s.client.newRequest("DELETE", u, tagsToRemove)
+	req, err := s.client.NewRequest("DELETE", u, tagsToRemove)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 // Add workspaces to a tag
@@ -135,13 +141,13 @@ func (s *organizationTags) AddWorkspaces(ctx context.Context, tag string, option
 		workspaces = append(workspaces, &workspaceID{ID: id})
 	}
 
-	u := fmt.Sprintf("tags/%s/relationships/workspaces", url.QueryEscape(tag))
-	req, err := s.client.newRequest("POST", u, workspaces)
+	u := fmt.Sprintf("tags/%s/relationships/workspaces", url.PathEscape(tag))
+	req, err := s.client.NewRequest("POST", u, workspaces)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 func (opts *OrganizationTagsDeleteOptions) valid() error {

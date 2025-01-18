@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -16,7 +19,7 @@ var _ PolicyChecks = (*policyChecks)(nil)
 // Terraform Enterprise API supports.
 //
 // TFE API docs:
-// https://www.terraform.io/docs/cloud/api/policy-checks.html
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/policy-checks
 type PolicyChecks interface {
 	// List all policy checks of the given run.
 	List(ctx context.Context, runID string, options *PolicyCheckListOptions) (*PolicyCheckList, error)
@@ -98,6 +101,7 @@ type PolicyResult struct {
 	Result         bool `jsonapi:"attr,result"`
 	SoftFailed     int  `jsonapi:"attr,soft-failed"`
 	TotalFailed    int  `jsonapi:"attr,total-failed"`
+	Sentinel       any  `jsonapi:"attr,sentinel"`
 }
 
 // PolicyStatusTimestamps holds the timestamps for individual policy check
@@ -111,6 +115,7 @@ type PolicyStatusTimestamps struct {
 }
 
 // A list of relations to include
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/policy-checks#available-related-resources
 type PolicyCheckIncludeOpt string
 
 const (
@@ -122,7 +127,9 @@ const (
 type PolicyCheckListOptions struct {
 	ListOptions
 
-	Include []PolicyCheckIncludeOpt `url:"include,omitempty"` // optional
+	// Optional: A list of relations to include. See available resources
+	// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/policy-checks#available-related-resources
+	Include []PolicyCheckIncludeOpt `url:"include,omitempty"`
 }
 
 // List all policy checks of the given run.
@@ -134,14 +141,14 @@ func (s *policyChecks) List(ctx context.Context, runID string, options *PolicyCh
 		return nil, err
 	}
 
-	u := fmt.Sprintf("runs/%s/policy-checks", url.QueryEscape(runID))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("runs/%s/policy-checks", url.PathEscape(runID))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	pcl := &PolicyCheckList{}
-	err = s.client.do(ctx, req, pcl)
+	err = req.Do(ctx, pcl)
 	if err != nil {
 		return nil, err
 	}
@@ -155,14 +162,14 @@ func (s *policyChecks) Read(ctx context.Context, policyCheckID string) (*PolicyC
 		return nil, ErrInvalidPolicyCheckID
 	}
 
-	u := fmt.Sprintf("policy-checks/%s", url.QueryEscape(policyCheckID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("policy-checks/%s", url.PathEscape(policyCheckID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	pc := &PolicyCheck{}
-	err = s.client.do(ctx, req, pc)
+	err = req.Do(ctx, pc)
 	if err != nil {
 		return nil, err
 	}
@@ -176,14 +183,14 @@ func (s *policyChecks) Override(ctx context.Context, policyCheckID string) (*Pol
 		return nil, ErrInvalidPolicyCheckID
 	}
 
-	u := fmt.Sprintf("policy-checks/%s/actions/override", url.QueryEscape(policyCheckID))
-	req, err := s.client.newRequest("POST", u, nil)
+	u := fmt.Sprintf("policy-checks/%s/actions/override", url.PathEscape(policyCheckID))
+	req, err := s.client.NewRequest("POST", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	pc := &PolicyCheck{}
-	err = s.client.do(ctx, req, pc)
+	err = req.Do(ctx, pc)
 	if err != nil {
 		return nil, err
 	}
@@ -216,14 +223,14 @@ func (s *policyChecks) Logs(ctx context.Context, policyCheckID string) (io.Reade
 			}
 		}
 
-		u := fmt.Sprintf("policy-checks/%s/output", url.QueryEscape(policyCheckID))
-		req, err := s.client.newRequest("GET", u, nil)
+		u := fmt.Sprintf("policy-checks/%s/output", url.PathEscape(policyCheckID))
+		req, err := s.client.NewRequest("GET", u, nil)
 		if err != nil {
 			return nil, err
 		}
 
 		logs := bytes.NewBuffer(nil)
-		err = s.client.do(ctx, req, logs)
+		err = req.Do(ctx, logs)
 		if err != nil {
 			return nil, err
 		}
@@ -233,26 +240,5 @@ func (s *policyChecks) Logs(ctx context.Context, policyCheckID string) (io.Reade
 }
 
 func (o *PolicyCheckListOptions) valid() error {
-	if o == nil {
-		return nil // nothing to validate
-	}
-
-	if err := validatePolicyCheckIncludeParams(o.Include); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func validatePolicyCheckIncludeParams(params []PolicyCheckIncludeOpt) error {
-	for _, p := range params {
-		switch p {
-		case PolicyCheckRunWorkspace, PolicyCheckRun:
-			// do nothing
-		default:
-			return ErrInvalidIncludeValue
-		}
-	}
-
 	return nil
 }

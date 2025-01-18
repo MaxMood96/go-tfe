@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -7,9 +7,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
+	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,6 +47,7 @@ func TestRunsList(t *testing.T) {
 			Include: []RunIncludeOpt{},
 		})
 		require.NoError(t, err)
+		require.NotEmpty(t, rl.Items)
 
 		found := []string{}
 		for _, r := range rl.Items {
@@ -79,11 +82,10 @@ func TestRunsList(t *testing.T) {
 		rl, err := client.Runs.List(ctx, wTest.ID, &RunListOptions{
 			Include: []RunIncludeOpt{RunWorkspace},
 		})
+		require.NoError(t, err)
 
-		assert.NoError(t, err)
-
-		assert.NotEmpty(t, rl.Items)
-		assert.NotNil(t, rl.Items[0].Workspace)
+		require.NotEmpty(t, rl.Items)
+		require.NotNil(t, rl.Items[0].Workspace)
 		assert.NotEmpty(t, rl.Items[0].Workspace.Name)
 	})
 
@@ -92,6 +94,85 @@ func TestRunsList(t *testing.T) {
 		assert.Nil(t, rl)
 		assert.EqualError(t, err, ErrInvalidWorkspaceID.Error())
 	})
+}
+
+func TestRunsListQueryParams(t *testing.T) {
+	type testCase struct {
+		options     *RunListOptions
+		description string
+		assertion   func(tc testCase, rl *RunList, err error)
+	}
+
+	client := testClient(t)
+	ctx := context.Background()
+
+	orgTest, orgTestCleanup := createOrganization(t, client)
+	defer orgTestCleanup()
+
+	workspaceTest, _ := createWorkspace(t, client, orgTest)
+	createPlannedRun(t, client, workspaceTest)
+	createRun(t, client, workspaceTest)
+
+	testCases := []testCase{
+		{
+			description: "with status query parameter",
+			options:     &RunListOptions{Status: string(RunPending), Include: []RunIncludeOpt{RunWorkspace}},
+			assertion: func(tc testCase, rl *RunList, err error) {
+				require.NoError(t, err)
+				assert.Equal(t, 1, len(rl.Items))
+			},
+		},
+		{
+			description: "with source query parameter",
+			options:     &RunListOptions{Source: string(RunSourceAPI), Include: []RunIncludeOpt{RunWorkspace}},
+			assertion: func(tc testCase, rl *RunList, err error) {
+				require.NoError(t, err)
+				assert.Equal(t, 2, len(rl.Items))
+				assert.Equal(t, rl.Items[0].Source, RunSourceAPI)
+			},
+		},
+		{
+			description: "with operation of plan_only parameter",
+			options:     &RunListOptions{Operation: string(RunOperationPlanOnly), Include: []RunIncludeOpt{RunWorkspace}},
+			assertion: func(tc testCase, rl *RunList, err error) {
+				require.NoError(t, err)
+				assert.Equal(t, 0, len(rl.Items))
+			},
+		},
+		{
+			description: "with mismatch user & commit parameter",
+			options:     &RunListOptions{User: randomString(t), Commit: randomString(t), Include: []RunIncludeOpt{RunWorkspace}},
+			assertion: func(tc testCase, rl *RunList, err error) {
+				require.NoError(t, err)
+				assert.Equal(t, 0, len(rl.Items))
+			},
+		},
+		{
+			description: "with operation of save_plan parameter",
+			options:     &RunListOptions{Operation: string(RunOperationSavePlan), Include: []RunIncludeOpt{RunWorkspace}},
+			assertion: func(tc testCase, rl *RunList, err error) {
+				require.NoError(t, err)
+				assert.Equal(t, 0, len(rl.Items))
+			},
+		},
+	}
+
+	betaTestCases := []testCase{}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.description, func(t *testing.T) {
+			runs, err := client.Runs.List(ctx, workspaceTest.ID, testCase.options)
+			testCase.assertion(testCase, runs, err)
+		})
+	}
+
+	for _, testCase := range betaTestCases {
+		t.Run(testCase.description, func(t *testing.T) {
+			skipUnlessBeta(t)
+			runs, err := client.Runs.List(ctx, workspaceTest.ID, testCase.options)
+			testCase.assertion(testCase, runs, err)
+		})
+	}
 }
 
 func TestRunsCreate(t *testing.T) {
@@ -109,11 +190,11 @@ func TestRunsCreate(t *testing.T) {
 		}
 
 		r, err := client.Runs.Create(ctx, options)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, r.ID)
 		assert.NotNil(t, r.CreatedAt)
 		assert.NotNil(t, r.Source)
-		assert.NotEmpty(t, r.StatusTimestamps)
+		require.NotNil(t, r.StatusTimestamps)
 		assert.NotZero(t, r.StatusTimestamps.PlanQueueableAt)
 	})
 
@@ -125,7 +206,46 @@ func TestRunsCreate(t *testing.T) {
 
 		r, err := client.Runs.Create(ctx, options)
 		require.NoError(t, err)
+		require.NotNil(t, r.ConfigurationVersion)
 		assert.Equal(t, cvTest.ID, r.ConfigurationVersion.ID)
+	})
+
+	t.Run("with allow empty apply", func(t *testing.T) {
+		options := RunCreateOptions{
+			Workspace:       wTest,
+			AllowEmptyApply: Bool(true),
+		}
+
+		r, err := client.Runs.Create(ctx, options)
+		require.NoError(t, err)
+		assert.Equal(t, true, r.AllowEmptyApply)
+	})
+
+	t.Run("with save-plan", func(t *testing.T) {
+		options := RunCreateOptions{
+			Workspace: wTest,
+			SavePlan:  Bool(true),
+		}
+
+		r, err := client.Runs.Create(ctx, options)
+		require.NoError(t, err)
+		assert.Equal(t, true, r.SavePlan)
+	})
+
+	t.Run("with terraform version and plan only", func(t *testing.T) {
+		options := RunCreateOptions{
+			Workspace:        wTest,
+			TerraformVersion: String("1.0.0"),
+		}
+		_, err := client.Runs.Create(ctx, options)
+		require.ErrorIs(t, err, ErrTerraformVersionValidForPlanOnly)
+
+		options.PlanOnly = Bool(true)
+
+		r, err := client.Runs.Create(ctx, options)
+		require.NoError(t, err)
+		assert.Equal(t, true, r.PlanOnly)
+		assert.Equal(t, "1.0.0", r.TerraformVersion)
 	})
 
 	t.Run("refresh defaults to true if not set as a create option", func(t *testing.T) {
@@ -237,7 +357,6 @@ func TestRunsCreate(t *testing.T) {
 
 func TestRunsRead_CostEstimate(t *testing.T) {
 	skipIfEnterprise(t)
-	skipIfFreeOnly(t)
 
 	client := testClient(t)
 	ctx := context.Background()
@@ -247,7 +366,7 @@ func TestRunsRead_CostEstimate(t *testing.T) {
 
 	t.Run("when the run exists", func(t *testing.T) {
 		r, err := client.Runs.Read(ctx, rTest.ID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, rTest, r)
 	})
 
@@ -279,7 +398,7 @@ func TestRunsReadWithOptions(t *testing.T) {
 		r, err := client.Runs.ReadWithOptions(ctx, rTest.ID, curOpts)
 		require.NoError(t, err)
 
-		assert.NotEmpty(t, r.CreatedBy)
+		require.NotEmpty(t, r.CreatedBy)
 		assert.NotEmpty(t, r.CreatedBy.Username)
 	})
 }
@@ -295,8 +414,19 @@ func TestRunsApply(t *testing.T) {
 	rTest, _ := createPlannedRun(t, client, wTest)
 
 	t.Run("when the run exists", func(t *testing.T) {
-		err := client.Runs.Apply(ctx, rTest.ID, RunApplyOptions{})
-		assert.NoError(t, err)
+		err := client.Runs.Apply(ctx, rTest.ID, RunApplyOptions{
+			Comment: String("Hello, Earl"),
+		})
+		require.NoError(t, err)
+
+		r, err := client.Runs.Read(ctx, rTest.ID)
+		require.NoError(t, err)
+
+		assert.Len(t, r.Comments, 1)
+
+		c, err := client.Comments.Read(ctx, r.Comments[0].ID)
+		require.NoError(t, err)
+		assert.Equal(t, "Hello, Earl", c.Body)
 	})
 
 	t.Run("when the run does not exist", func(t *testing.T) {
@@ -327,7 +457,7 @@ func TestRunsCancel(t *testing.T) {
 
 	t.Run("when the run exists", func(t *testing.T) {
 		err := client.Runs.Cancel(ctx, rTest.ID, RunCancelOptions{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("when the run does not exist", func(t *testing.T) {
@@ -395,7 +525,7 @@ func TestRunsForceCancel(t *testing.T) {
 		// Force-cancel only becomes available if a normal cancel is performed
 		// first, and the desired canceled state is not reached within a pre-
 		// determined amount of time (see
-		// https://www.terraform.io/docs/cloud/api/run.html#forcefully-cancel-a-run).
+		// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/run#forcefully-cancel-a-run).
 	})
 
 	t.Run("when the run does not exist", func(t *testing.T) {
@@ -405,6 +535,61 @@ func TestRunsForceCancel(t *testing.T) {
 
 	t.Run("with invalid run ID", func(t *testing.T) {
 		err := client.Runs.ForceCancel(ctx, badIdentifier, RunForceCancelOptions{})
+		assert.EqualError(t, err, ErrInvalidRunID.Error())
+	})
+}
+
+func TestRunsForceExecute(t *testing.T) {
+	client := testClient(t)
+	ctx := context.Background()
+
+	wTest, wTestCleanup := createWorkspace(t, client, nil)
+	defer wTestCleanup()
+
+	// We need to create 2 runs here:
+	// - The first run will automatically be planned so that the second
+	//   run can't be executed.
+	// - The second run will be pending until the first run is confirmed or
+	//   discarded, so we will force execute this run.
+	rToCancel, _ := createPlannedRun(t, client, wTest)
+	rTest, _ := createRunWaitForStatus(t, client, wTest, RunPending)
+
+	t.Run("a successful force-execute", func(t *testing.T) {
+		// Verify the user has permission to force-execute the run
+		assert.True(t, rTest.Permissions.CanForceExecute)
+
+		err := client.Runs.ForceExecute(ctx, rTest.ID)
+		require.NoError(t, err)
+
+		timeout := 2 * time.Minute
+		ctxPollRunForceExecute, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+
+		// Verify the second run has a status that is an applyable status
+		rTest = pollRunStatus(t,
+			client,
+			ctxPollRunForceExecute,
+			rTest,
+			applyableStatuses(rTest))
+		if rTest.Status == RunErrored {
+			fatalDumpRunLog(t, client, ctx, rTest)
+		}
+
+		// Refresh the view of the first run
+		rToCancel, err = client.Runs.Read(ctx, rToCancel.ID)
+		require.NoError(t, err)
+
+		// Verify the first run was discarded
+		assert.Equal(t, RunDiscarded, rToCancel.Status)
+	})
+
+	t.Run("when the run does not exist", func(t *testing.T) {
+		err := client.Runs.ForceExecute(ctx, "nonexisting")
+		assert.Equal(t, err, ErrResourceNotFound)
+	})
+
+	t.Run("with invalid run ID", func(t *testing.T) {
+		err := client.Runs.ForceExecute(ctx, badIdentifier)
 		assert.EqualError(t, err, ErrInvalidRunID.Error())
 	})
 }
@@ -420,7 +605,7 @@ func TestRunsDiscard(t *testing.T) {
 
 	t.Run("when the run exists", func(t *testing.T) {
 		err := client.Runs.Discard(ctx, rTest.ID, RunDiscardOptions{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("when the run does not exist", func(t *testing.T) {
@@ -461,6 +646,7 @@ func TestRun_Unmarshal(t *testing.T) {
 					"plan-queued-at": "2020-03-16T23:15:59+00:00",
 					"errored-at":     "2019-03-16T23:23:59+00:00",
 				},
+				"variables": []map[string]string{{"key": "a-key", "value": "\"a-value\""}},
 			},
 		},
 	}
@@ -496,4 +682,41 @@ func TestRun_Unmarshal(t *testing.T) {
 	assert.Equal(t, run.Permissions.CanForceCancel, true)
 	assert.Equal(t, run.StatusTimestamps.PlanQueuedAt, planQueuedParsedTime)
 	assert.Equal(t, run.StatusTimestamps.ErroredAt, erroredParsedTime)
+
+	require.NotEmpty(t, run.Variables)
+	assert.Equal(t, run.Variables[0].Key, "a-key")
+	assert.Equal(t, run.Variables[0].Value, "\"a-value\"")
+}
+
+func TestRunCreateOptions_Marshal(t *testing.T) {
+	client := testClient(t)
+
+	wTest, wTestCleanup := createWorkspace(t, client, nil)
+	defer wTestCleanup()
+
+	opts := RunCreateOptions{
+		Workspace: wTest,
+		Variables: []*RunVariable{
+			{
+				Key:   "test_variable",
+				Value: "Hello, World!",
+			},
+			{
+				Key:   "test_foo",
+				Value: "Hello, Foo!",
+			},
+		},
+	}
+
+	reqBody, err := serializeRequestBody(&opts)
+	require.NoError(t, err)
+	req, err := retryablehttp.NewRequest("POST", "url", reqBody)
+	require.NoError(t, err)
+	bodyBytes, err := req.BodyBytes()
+	require.NoError(t, err)
+
+	expectedBody := fmt.Sprintf(`{"data":{"type":"runs","attributes":{"variables":[{"key":"test_variable","value":"Hello, World!"},{"key":"test_foo","value":"Hello, Foo!"}]},"relationships":{"configuration-version":{"data":null},"workspace":{"data":{"type":"workspaces","id":"%s"}}}}}
+`, wTest.ID)
+
+	assert.Equal(t, string(bodyBytes), expectedBody)
 }

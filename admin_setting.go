@@ -1,9 +1,12 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 // AdminSettings describes all the admin settings related methods that the Terraform Enterprise API supports.
 // Note that admin settings are only available in Terraform Enterprise.
 //
-// TFE API docs: https://www.terraform.io/docs/cloud/api/admin/settings.html
+// TFE API docs: https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/settings
 type AdminSettings struct {
 	General        GeneralSettings
 	SAML           SAMLSettings
@@ -11,6 +14,7 @@ type AdminSettings struct {
 	SMTP           SMTPSettings
 	Twilio         TwilioSettings
 	Customization  CustomizationSettings
+	OIDC           OIDCSettings
 }
 
 func newAdminSettings(client *Client) *AdminSettings {
@@ -21,5 +25,6 @@ func newAdminSettings(client *Client) *AdminSettings {
 		SMTP:           &adminSMTPSettings{client: client},
 		Twilio:         &adminTwilioSettings{client: client},
 		Customization:  &adminCustomizationSettings{client: client},
+		OIDC:           &adminOIDCSettings{client: client},
 	}
 }

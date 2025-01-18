@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -13,7 +13,7 @@ import (
 )
 
 func TestAdminTerraformVersions_List(t *testing.T) {
-	skipIfCloud(t)
+	skipUnlessEnterprise(t)
 
 	client := testClient(t)
 	ctx := context.Background()
@@ -96,16 +96,56 @@ func TestAdminTerraformVersions_List(t *testing.T) {
 }
 
 func TestAdminTerraformVersions_CreateDelete(t *testing.T) {
-	skipIfCloud(t)
+	skipUnlessEnterprise(t)
 
 	client := testClient(t)
 	ctx := context.Background()
 
-	t.Run("with valid options", func(t *testing.T) {
+	t.Run("with valid options and archs", func(t *testing.T) {
 		opts := AdminTerraformVersionCreateOptions{
-			Version:          String("1.1.100"),
+			Version:          String(genSafeRandomTerraformVersion()),
+			Deprecated:       Bool(true),
+			DeprecatedReason: String("Test Reason"),
+			Official:         Bool(false),
+			Enabled:          Bool(false),
+			Beta:             Bool(false),
+			Archs: []*ToolVersionArchitectureOptions{
+				{
+					URL:  "https://www.hashicorp.com",
+					Sha:  *String(genSha(t)),
+					OS:   linux,
+					Arch: amd64,
+				},
+				{
+					URL:  "https://www.hashicorp.com",
+					Sha:  *String(genSha(t)),
+					OS:   linux,
+					Arch: arm64,
+				}},
+		}
+		tfv, err := client.Admin.TerraformVersions.Create(ctx, opts)
+		require.NoError(t, err)
+
+		defer func() {
+			deleteErr := client.Admin.TerraformVersions.Delete(ctx, tfv.ID)
+			require.NoError(t, deleteErr)
+		}()
+
+		assert.Equal(t, *opts.Version, tfv.Version)
+		assert.Equal(t, *opts.URL, tfv.URL)
+		assert.Equal(t, *opts.Sha, tfv.Sha)
+		assert.Equal(t, *opts.Official, tfv.Official)
+		assert.Equal(t, *opts.Deprecated, tfv.Deprecated)
+		assert.Equal(t, *opts.DeprecatedReason, *tfv.DeprecatedReason)
+		assert.Equal(t, *opts.Enabled, tfv.Enabled)
+		assert.Equal(t, *opts.Beta, tfv.Beta)
+	})
+
+	t.Run("with valid options, url, and sha", func(t *testing.T) {
+		opts := AdminTerraformVersionCreateOptions{
+			Version:          String(genSafeRandomTerraformVersion()),
 			URL:              String("https://www.hashicorp.com"),
-			Sha:              String(genSha(t, "secret", "data")),
+			Sha:              String(genSha(t)),
 			Deprecated:       Bool(true),
 			DeprecatedReason: String("Test Reason"),
 			Official:         Bool(false),
@@ -131,10 +171,11 @@ func TestAdminTerraformVersions_CreateDelete(t *testing.T) {
 	})
 
 	t.Run("with only required options", func(t *testing.T) {
+		version := genSafeRandomTerraformVersion()
 		opts := AdminTerraformVersionCreateOptions{
-			Version: String("1.1.100"),
+			Version: String(version),
 			URL:     String("https://www.hashicorp.com"),
-			Sha:     String(genSha(t, "secret", "data")),
+			Sha:     String(genSha(t)),
 		}
 		tfv, err := client.Admin.TerraformVersions.Create(ctx, opts)
 		require.NoError(t, err)
@@ -161,21 +202,29 @@ func TestAdminTerraformVersions_CreateDelete(t *testing.T) {
 }
 
 func TestAdminTerraformVersions_ReadUpdate(t *testing.T) {
-	skipIfCloud(t)
+	skipUnlessEnterprise(t)
 
 	client := testClient(t)
 	ctx := context.Background()
 
 	t.Run("reads and updates", func(t *testing.T) {
+		version := genSafeRandomTerraformVersion()
+		sha := String(genSha(t))
 		opts := AdminTerraformVersionCreateOptions{
-			Version:          String("1.1.100"),
+			Version:          String(version),
 			URL:              String("https://www.hashicorp.com"),
-			Sha:              String(genSha(t, "secret", "data")),
+			Sha:              String(genSha(t)),
 			Official:         Bool(false),
 			Deprecated:       Bool(true),
 			DeprecatedReason: String("Test Reason"),
 			Enabled:          Bool(false),
 			Beta:             Bool(false),
+			Archs: []*ToolVersionArchitectureOptions{{
+				URL:  "https://www.hashicorp.com",
+				Sha:  *sha,
+				OS:   linux,
+				Arch: amd64,
+			}},
 		}
 		tfv, err := client.Admin.TerraformVersions.Create(ctx, opts)
 		require.NoError(t, err)
@@ -198,7 +247,7 @@ func TestAdminTerraformVersions_ReadUpdate(t *testing.T) {
 		assert.Equal(t, *opts.Enabled, tfv.Enabled)
 		assert.Equal(t, *opts.Beta, tfv.Beta)
 
-		updateVersion := "1.1.200"
+		updateVersion := genSafeRandomTerraformVersion()
 		updateURL := "https://app.terraform.io/"
 		updateOpts := AdminTerraformVersionUpdateOptions{
 			Version:    String(updateVersion),

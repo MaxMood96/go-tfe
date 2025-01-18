@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -12,7 +15,7 @@ var _ AdminWorkspaces = (*adminWorkspaces)(nil)
 // AdminWorkspaces describes all the admin workspace related methods that the Terraform Enterprise API supports.
 // Note that admin settings are only available in Terraform Enterprise.
 //
-// TFE API docs: https://www.terraform.io/docs/cloud/api/admin/workspaces.html
+// TFE API docs: https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/workspaces
 type AdminWorkspaces interface {
 	// List all the workspaces within a workspace.
 	List(ctx context.Context, options *AdminWorkspaceListOptions) (*AdminWorkspaceList, error)
@@ -47,7 +50,7 @@ type AdminWorkspace struct {
 }
 
 // AdminWorkspaceIncludeOpt represents the available options for include query params.
-// https://www.terraform.io/docs/cloud/api/admin/workspaces.html#available-related-resources
+// https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/workspaces#available-related-resources
 type AdminWorkspaceIncludeOpt string
 
 const (
@@ -61,11 +64,20 @@ type AdminWorkspaceListOptions struct {
 	ListOptions
 
 	// A query string (partial workspace name) used to filter the results.
-	// https://www.terraform.io/docs/cloud/api/admin/workspaces.html#query-parameters
+	// https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/workspaces#query-parameters
 	Query string `url:"q,omitempty"`
+
 	// Optional: A list of relations to include. See available resources
-	// https://www.terraform.io/docs/cloud/api/admin/workspaces.html#available-related-resources
+	// https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/workspaces#available-related-resources
 	Include []AdminWorkspaceIncludeOpt `url:"include,omitempty"`
+
+	// Optional: A comma-separated list of Run statuses to restrict results. See available resources
+	// https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/workspaces#query-parameters
+	Filter string `url:"filter[current_run][status],omitempty"`
+
+	// Optional: May sort on "name" (the default) and "current-run.created-at" (which sorts by the time of the current run)
+	// Prepending a hyphen to the sort parameter will reverse the order (e.g. "-name" to reverse the default order)
+	Sort string `url:"sort,omitempty"`
 }
 
 // AdminWorkspaceList represents a list of workspaces.
@@ -81,13 +93,13 @@ func (s *adminWorkspaces) List(ctx context.Context, options *AdminWorkspaceListO
 	}
 
 	u := "admin/workspaces"
-	req, err := s.client.newRequest("GET", u, options)
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	awl := &AdminWorkspaceList{}
-	err = s.client.do(ctx, req, awl)
+	err = req.Do(ctx, awl)
 	if err != nil {
 		return nil, err
 	}
@@ -101,14 +113,14 @@ func (s *adminWorkspaces) Read(ctx context.Context, workspaceID string) (*AdminW
 		return nil, ErrInvalidWorkspaceValue
 	}
 
-	u := fmt.Sprintf("admin/workspaces/%s", url.QueryEscape(workspaceID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("admin/workspaces/%s", url.PathEscape(workspaceID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	aw := &AdminWorkspace{}
-	err = s.client.do(ctx, req, aw)
+	err = req.Do(ctx, aw)
 	if err != nil {
 		return nil, err
 	}
@@ -122,36 +134,15 @@ func (s *adminWorkspaces) Delete(ctx context.Context, workspaceID string) error 
 		return ErrInvalidWorkspaceValue
 	}
 
-	u := fmt.Sprintf("admin/workspaces/%s", url.QueryEscape(workspaceID))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("admin/workspaces/%s", url.PathEscape(workspaceID))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 func (o *AdminWorkspaceListOptions) valid() error {
-	if o == nil {
-		return nil // nothing to validate
-	}
-
-	if err := validateAdminWSIncludeParams(o.Include); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func validateAdminWSIncludeParams(params []AdminWorkspaceIncludeOpt) error {
-	for _, p := range params {
-		switch p {
-		case AdminWorkspaceOrg, AdminWorkspaceCurrentRun, AdminWorkspaceOrgOwners:
-			// do nothing
-		default:
-			return ErrInvalidIncludeValue
-		}
-	}
-
 	return nil
 }

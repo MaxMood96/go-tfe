@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -15,7 +18,7 @@ var _ CostEstimates = (*costEstimates)(nil)
 // CostEstimates describes all the costEstimate related methods that
 // the Terraform Enterprise API supports.
 //
-// TFE API docs: https://www.terraform.io/docs/cloud/api/cost-estimates.html
+// TFE API docs: https://developer.hashicorp.com/terraform/cloud-docs/api-docs/cost-estimates
 type CostEstimates interface {
 	// Read a costEstimate by its ID.
 	Read(ctx context.Context, costEstimateID string) (*CostEstimate, error)
@@ -72,14 +75,14 @@ func (s *costEstimates) Read(ctx context.Context, costEstimateID string) (*CostE
 		return nil, ErrInvalidCostEstimateID
 	}
 
-	u := fmt.Sprintf("cost-estimates/%s", url.QueryEscape(costEstimateID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("cost-estimates/%s", url.PathEscape(costEstimateID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	ce := &CostEstimate{}
-	err = s.client.do(ctx, req, ce)
+	err = req.Do(ctx, ce)
 	if err != nil {
 		return nil, err
 	}
@@ -113,14 +116,14 @@ func (s *costEstimates) Logs(ctx context.Context, costEstimateID string) (io.Rea
 			}
 		}
 
-		u := fmt.Sprintf("cost-estimates/%s/output", url.QueryEscape(costEstimateID))
-		req, err := s.client.newRequest("GET", u, nil)
+		u := fmt.Sprintf("cost-estimates/%s/output", url.PathEscape(costEstimateID))
+		req, err := s.client.NewRequest("GET", u, nil)
 		if err != nil {
 			return nil, err
 		}
 
 		logs := bytes.NewBuffer(nil)
-		err = s.client.do(ctx, req, logs)
+		err = req.Do(ctx, logs)
 		if err != nil {
 			return nil, err
 		}

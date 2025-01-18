@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -12,13 +12,13 @@ import (
 )
 
 func TestWorkspaceRunTasksCreate(t *testing.T) {
-	skipIfBeta(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
+
+	upgradeOrganizationSubscription(t, client, orgTest)
 
 	runTaskTest, runTaskTestCleanup := createRunTask(t, client, orgTest)
 	defer runTaskTestCleanup()
@@ -27,29 +27,80 @@ func TestWorkspaceRunTasksCreate(t *testing.T) {
 	defer wkspaceTestCleanup()
 
 	t.Run("attach run task to workspace", func(t *testing.T) {
+		s := []Stage{PrePlan, PostPlan}
 		wr, err := client.WorkspaceRunTasks.Create(ctx, wkspaceTest.ID, WorkspaceRunTaskCreateOptions{
 			EnforcementLevel: Mandatory,
+			Stages:           &s,
 			RunTask:          runTaskTest,
 		})
 
 		require.NoError(t, err)
+		defer func() {
+			err = client.WorkspaceRunTasks.Delete(ctx, wkspaceTest.ID, wr.ID)
+			require.NoError(t, err)
+		}()
+
 		assert.NotEmpty(t, wr.ID)
-		assert.Equal(t, wr.EnforcementLevel, Mandatory)
+		assert.Equal(t, Mandatory, wr.EnforcementLevel)
+		assert.Equal(t, s[0], wr.Stage)
+		assert.Equal(t, s, wr.Stages)
 
 		t.Run("ensure run task is deserialized properly", func(t *testing.T) {
+			assert.NotNil(t, wr.RunTask)
+			assert.NotEmpty(t, wr.RunTask.ID)
+		})
+	})
+}
+
+func TestWorkspaceRunTasksCreateDeprecated(t *testing.T) {
+	// This test uses the deprecate `stage` attribute
+	client := testClient(t)
+	ctx := context.Background()
+
+	orgTest, orgTestCleanup := createOrganization(t, client)
+	defer orgTestCleanup()
+
+	upgradeOrganizationSubscription(t, client, orgTest)
+
+	runTaskTest, runTaskTestCleanup := createRunTask(t, client, orgTest)
+	defer runTaskTestCleanup()
+
+	wkspaceTest, wkspaceTestCleanup := createWorkspace(t, client, orgTest)
+	defer wkspaceTestCleanup()
+
+	t.Run("attach run task to workspace", func(t *testing.T) {
+		s := PrePlan
+		wr, err := client.WorkspaceRunTasks.Create(ctx, wkspaceTest.ID, WorkspaceRunTaskCreateOptions{
+			EnforcementLevel: Mandatory,
+			Stage:            &s,
+			RunTask:          runTaskTest,
+		})
+
+		require.NoError(t, err)
+		defer func() {
+			err = client.WorkspaceRunTasks.Delete(ctx, wkspaceTest.ID, wr.ID)
+			require.NoError(t, err)
+		}()
+
+		assert.NotEmpty(t, wr.ID)
+		assert.Equal(t, wr.EnforcementLevel, Mandatory)
+		assert.Equal(t, wr.Stage, s)
+
+		t.Run("ensure run task is deserialized properly", func(t *testing.T) {
+			assert.NotNil(t, wr.RunTask)
 			assert.NotEmpty(t, wr.RunTask.ID)
 		})
 	})
 }
 
 func TestWorkspaceRunTasksList(t *testing.T) {
-	skipIfBeta(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
+
+	upgradeOrganizationSubscription(t, client, orgTest)
 
 	wkspaceTest, wkspaceTestCleanup := createWorkspace(t, client, orgTest)
 	defer wkspaceTestCleanup()
@@ -77,13 +128,13 @@ func TestWorkspaceRunTasksList(t *testing.T) {
 }
 
 func TestWorkspaceRunTasksRead(t *testing.T) {
-	skipIfBeta(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
+
+	upgradeOrganizationSubscription(t, client, orgTest)
 
 	wkspaceTest, wkspaceTestCleanup := createWorkspace(t, client, orgTest)
 	defer wkspaceTestCleanup()
@@ -112,13 +163,13 @@ func TestWorkspaceRunTasksRead(t *testing.T) {
 }
 
 func TestWorkspaceRunTasksUpdate(t *testing.T) {
-	skipIfBeta(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
+
+	upgradeOrganizationSubscription(t, client, orgTest)
 
 	wkspaceTest, wkspaceTestCleanup := createWorkspace(t, client, orgTest)
 	defer wkspaceTestCleanup()
@@ -129,9 +180,46 @@ func TestWorkspaceRunTasksUpdate(t *testing.T) {
 	wrTaskTest, wrTaskTestCleanup := createWorkspaceRunTask(t, client, wkspaceTest, runTaskTest)
 	defer wrTaskTestCleanup()
 
-	t.Run("rename task", func(t *testing.T) {
+	t.Run("update task", func(t *testing.T) {
+		stages := []Stage{PrePlan, PostPlan}
 		wr, err := client.WorkspaceRunTasks.Update(ctx, wkspaceTest.ID, wrTaskTest.ID, WorkspaceRunTaskUpdateOptions{
 			EnforcementLevel: Mandatory,
+			Stages:           &stages,
+		})
+		require.NoError(t, err)
+
+		wr, err = client.WorkspaceRunTasks.Read(ctx, wkspaceTest.ID, wr.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, Mandatory, wr.EnforcementLevel)
+		assert.Equal(t, stages, wr.Stages)
+		assert.Equal(t, PrePlan, wr.Stage)
+	})
+}
+
+func TestWorkspaceRunTasksUpdateDeprecated(t *testing.T) {
+	client := testClient(t)
+	ctx := context.Background()
+
+	orgTest, orgTestCleanup := createOrganization(t, client)
+	defer orgTestCleanup()
+
+	upgradeOrganizationSubscription(t, client, orgTest)
+
+	wkspaceTest, wkspaceTestCleanup := createWorkspace(t, client, orgTest)
+	defer wkspaceTestCleanup()
+
+	runTaskTest, runTaskTestCleanup := createRunTask(t, client, orgTest)
+	defer runTaskTestCleanup()
+
+	wrTaskTest, wrTaskTestCleanup := createWorkspaceRunTask(t, client, wkspaceTest, runTaskTest)
+	defer wrTaskTestCleanup()
+
+	t.Run("update task", func(t *testing.T) {
+		stage := PrePlan
+		wr, err := client.WorkspaceRunTasks.Update(ctx, wkspaceTest.ID, wrTaskTest.ID, WorkspaceRunTaskUpdateOptions{
+			EnforcementLevel: Mandatory,
+			Stage:            &stage,
 		})
 		require.NoError(t, err)
 
@@ -139,17 +227,18 @@ func TestWorkspaceRunTasksUpdate(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, wr.EnforcementLevel, Mandatory)
+		assert.Equal(t, wr.Stage, PrePlan)
 	})
 }
 
 func TestWorkspaceRunTasksDelete(t *testing.T) {
-	skipIfBeta(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
+
+	upgradeOrganizationSubscription(t, client, orgTest)
 
 	wkspaceTest, wkspaceTestCleanup := createWorkspace(t, client, orgTest)
 	defer wkspaceTestCleanup()
@@ -173,8 +262,7 @@ func TestWorkspaceRunTasksDelete(t *testing.T) {
 	})
 
 	t.Run("when the workspace does not exist", func(t *testing.T) {
-		wkspaceTestCleanup()
-		err := client.WorkspaceRunTasks.Delete(ctx, wkspaceTest.ID, wrTaskTest.ID)
+		err := client.WorkspaceRunTasks.Delete(ctx, "does-not-exist", wrTaskTest.ID)
 		assert.EqualError(t, err, ErrResourceNotFound.Error())
 	})
 }

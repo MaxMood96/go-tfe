@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -12,7 +15,7 @@ var _ Variables = (*variables)(nil)
 // Variables describes all the variable related methods that the Terraform
 // Enterprise API supports.
 //
-// TFE API docs: https://www.terraform.io/docs/cloud/api/workspace-variables.html
+// TFE API docs: https://developer.hashicorp.com/terraform/cloud-docs/api-docs/workspace-variables
 type Variables interface {
 	// List all the variables associated with the given workspace.
 	List(ctx context.Context, workspaceID string, options *VariableListOptions) (*VariableList, error)
@@ -60,6 +63,7 @@ type Variable struct {
 	Category    CategoryType `jsonapi:"attr,category"`
 	HCL         bool         `jsonapi:"attr,hcl"`
 	Sensitive   bool         `jsonapi:"attr,sensitive"`
+	VersionID   string       `jsonapi:"attr,version-id"`
 
 	// Relations
 	Workspace *Workspace `jsonapi:"relation,configurable"`
@@ -114,6 +118,9 @@ type VariableUpdateOptions struct {
 	// The description of the variable.
 	Description *string `jsonapi:"attr,description,omitempty"`
 
+	// Whether this is a Terraform or environment variable.
+	Category *CategoryType `jsonapi:"attr,category,omitempty"`
+
 	// Whether to evaluate the value of the variable as a string of HCL code.
 	HCL *bool `jsonapi:"attr,hcl,omitempty"`
 
@@ -127,14 +134,14 @@ func (s *variables) List(ctx context.Context, workspaceID string, options *Varia
 		return nil, ErrInvalidWorkspaceID
 	}
 
-	u := fmt.Sprintf("workspaces/%s/vars", url.QueryEscape(workspaceID))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("workspaces/%s/vars", url.PathEscape(workspaceID))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	vl := &VariableList{}
-	err = s.client.do(ctx, req, vl)
+	err = req.Do(ctx, vl)
 	if err != nil {
 		return nil, err
 	}
@@ -151,14 +158,14 @@ func (s *variables) Create(ctx context.Context, workspaceID string, options Vari
 		return nil, err
 	}
 
-	u := fmt.Sprintf("workspaces/%s/vars", url.QueryEscape(workspaceID))
-	req, err := s.client.newRequest("POST", u, &options)
+	u := fmt.Sprintf("workspaces/%s/vars", url.PathEscape(workspaceID))
+	req, err := s.client.NewRequest("POST", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	v := &Variable{}
-	err = s.client.do(ctx, req, v)
+	err = req.Do(ctx, v)
 	if err != nil {
 		return nil, err
 	}
@@ -175,14 +182,14 @@ func (s *variables) Read(ctx context.Context, workspaceID, variableID string) (*
 		return nil, ErrInvalidVariableID
 	}
 
-	u := fmt.Sprintf("workspaces/%s/vars/%s", url.QueryEscape(workspaceID), url.QueryEscape(variableID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("workspaces/%s/vars/%s", url.PathEscape(workspaceID), url.PathEscape(variableID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	v := &Variable{}
-	err = s.client.do(ctx, req, v)
+	err = req.Do(ctx, v)
 	if err != nil {
 		return nil, err
 	}
@@ -199,14 +206,14 @@ func (s *variables) Update(ctx context.Context, workspaceID, variableID string, 
 		return nil, ErrInvalidVariableID
 	}
 
-	u := fmt.Sprintf("workspaces/%s/vars/%s", url.QueryEscape(workspaceID), url.QueryEscape(variableID))
-	req, err := s.client.newRequest("PATCH", u, &options)
+	u := fmt.Sprintf("workspaces/%s/vars/%s", url.PathEscape(workspaceID), url.PathEscape(variableID))
+	req, err := s.client.NewRequest("PATCH", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	v := &Variable{}
-	err = s.client.do(ctx, req, v)
+	err = req.Do(ctx, v)
 	if err != nil {
 		return nil, err
 	}
@@ -223,13 +230,13 @@ func (s *variables) Delete(ctx context.Context, workspaceID, variableID string) 
 		return ErrInvalidVariableID
 	}
 
-	u := fmt.Sprintf("workspaces/%s/vars/%s", url.QueryEscape(workspaceID), url.QueryEscape(variableID))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("workspaces/%s/vars/%s", url.PathEscape(workspaceID), url.PathEscape(variableID))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 func (o VariableCreateOptions) valid() error {

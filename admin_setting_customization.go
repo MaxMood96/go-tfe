@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -21,7 +24,7 @@ type adminCustomizationSettings struct {
 }
 
 // AdminCustomizationSetting represents the Customization settings in Terraform Enterprise for the Admin Settings API.
-// https://www.terraform.io/cloud-docs/api-docs/admin/settings
+// https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/settings
 type AdminCustomizationSetting struct {
 	ID           string `jsonapi:"primary,customization-settings"`
 	SupportEmail string `jsonapi:"attr,support-email-address"`
@@ -33,13 +36,13 @@ type AdminCustomizationSetting struct {
 
 // Read returns the Customization settings.
 func (a *adminCustomizationSettings) Read(ctx context.Context) (*AdminCustomizationSetting, error) {
-	req, err := a.client.newRequest("GET", "admin/customization-settings", nil)
+	req, err := a.client.NewRequest("GET", "admin/customization-settings", nil)
 	if err != nil {
 		return nil, err
 	}
 
 	cs := &AdminCustomizationSetting{}
-	err = a.client.do(ctx, req, cs)
+	err = req.Do(ctx, cs)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +52,7 @@ func (a *adminCustomizationSettings) Read(ctx context.Context) (*AdminCustomizat
 
 // AdminCustomizationSettingsUpdateOptions represents the admin options for updating
 // Customization settings.
-// https://www.terraform.io/docs/cloud/api/admin/settings.html#request-body-6
+// https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/settings#request-body-6
 type AdminCustomizationSettingsUpdateOptions struct {
 	SupportEmail *string `jsonapi:"attr,support-email-address,omitempty"`
 	LoginHelp    *string `jsonapi:"attr,login-help,omitempty"`
@@ -60,13 +63,13 @@ type AdminCustomizationSettingsUpdateOptions struct {
 
 // Update updates the customization settings.
 func (a *adminCustomizationSettings) Update(ctx context.Context, options AdminCustomizationSettingsUpdateOptions) (*AdminCustomizationSetting, error) {
-	req, err := a.client.newRequest("PATCH", "admin/customization-settings", &options)
+	req, err := a.client.NewRequest("PATCH", "admin/customization-settings", &options)
 	if err != nil {
 		return nil, err
 	}
 
 	cs := &AdminCustomizationSetting{}
-	err = a.client.do(ctx, req, cs)
+	err = req.Do(ctx, cs)
 	if err != nil {
 		return nil, err
 	}

@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -11,10 +14,10 @@ import (
 var _ UserTokens = (*userTokens)(nil)
 
 // UserTokens describes all the user token related methods that the
-// Terraform Cloud/Enterprise API supports.
+// HCP Terraform and Terraform Enterprise API supports.
 //
 // TFE API docs:
-// https://www.terraform.io/docs/cloud/api/user-tokens.html
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/user-tokens
 type UserTokens interface {
 	// List all the tokens of the given user ID.
 	List(ctx context.Context, userID string) (*UserTokenList, error)
@@ -40,19 +43,32 @@ type UserTokenList struct {
 	Items []*UserToken
 }
 
-// UserToken represents a Terraform Enterprise user token.
-type UserToken struct {
-	ID          string    `jsonapi:"primary,authentication-tokens"`
-	CreatedAt   time.Time `jsonapi:"attr,created-at,iso8601"`
-	Description string    `jsonapi:"attr,description"`
-	LastUsedAt  time.Time `jsonapi:"attr,last-used-at,iso8601"`
-	Token       string    `jsonapi:"attr,token"`
+// CreatedByChoice is a choice type struct that represents the possible values
+// within a polymorphic relation. If a value is available, exactly one field
+// will be non-nil.
+type CreatedByChoice struct {
+	Organization *Organization
+	Team         *Team
+	User         *User
 }
 
-// UserTokenCreateOptions the options for creating a user token.
+// UserToken represents a Terraform Enterprise user token.
+type UserToken struct {
+	ID          string           `jsonapi:"primary,authentication-tokens"`
+	CreatedAt   time.Time        `jsonapi:"attr,created-at,iso8601"`
+	Description string           `jsonapi:"attr,description"`
+	LastUsedAt  time.Time        `jsonapi:"attr,last-used-at,iso8601"`
+	Token       string           `jsonapi:"attr,token"`
+	ExpiredAt   time.Time        `jsonapi:"attr,expired-at,iso8601"`
+	CreatedBy   *CreatedByChoice `jsonapi:"polyrelation,created-by"`
+}
+
+// UserTokenCreateOptions contains the options for creating a user token.
 type UserTokenCreateOptions struct {
-	// Optional: Description of the token
 	Description string `jsonapi:"attr,description,omitempty"`
+	// Optional: The token's expiration date.
+	// This feature is available in TFE release v202305-1 and later
+	ExpiredAt *time.Time `jsonapi:"attr,expired-at,iso8601,omitempty"`
 }
 
 // Create a new user token
@@ -61,14 +77,14 @@ func (s *userTokens) Create(ctx context.Context, userID string, options UserToke
 		return nil, ErrInvalidUserID
 	}
 
-	u := fmt.Sprintf("users/%s/authentication-tokens", url.QueryEscape(userID))
-	req, err := s.client.newRequest("POST", u, &options)
+	u := fmt.Sprintf("users/%s/authentication-tokens", url.PathEscape(userID))
+	req, err := s.client.NewRequest("POST", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	ut := &UserToken{}
-	err = s.client.do(ctx, req, ut)
+	err = req.Do(ctx, ut)
 	if err != nil {
 		return nil, err
 	}
@@ -82,14 +98,14 @@ func (s *userTokens) List(ctx context.Context, userID string) (*UserTokenList, e
 		return nil, ErrInvalidUserID
 	}
 
-	u := fmt.Sprintf("users/%s/authentication-tokens", url.QueryEscape(userID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("users/%s/authentication-tokens", url.PathEscape(userID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	tl := &UserTokenList{}
-	err = s.client.do(ctx, req, tl)
+	err = req.Do(ctx, tl)
 	if err != nil {
 		return nil, err
 	}
@@ -103,14 +119,14 @@ func (s *userTokens) Read(ctx context.Context, tokenID string) (*UserToken, erro
 		return nil, ErrInvalidTokenID
 	}
 
-	u := fmt.Sprintf("authentication-tokens/%s", url.QueryEscape(tokenID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("authentication-tokens/%s", url.PathEscape(tokenID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	tt := &UserToken{}
-	err = s.client.do(ctx, req, tt)
+	err = req.Do(ctx, tt)
 	if err != nil {
 		return nil, err
 	}
@@ -124,11 +140,11 @@ func (s *userTokens) Delete(ctx context.Context, tokenID string) error {
 		return ErrInvalidTokenID
 	}
 
-	u := fmt.Sprintf("authentication-tokens/%s", url.QueryEscape(tokenID))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("authentication-tokens/%s", url.PathEscape(tokenID))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }

@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -14,8 +14,92 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// BEWARE: The admin workspaces API can view all of the workspaces created by
+// EVERY test organization in EVERY concurrent test run (or other usage) for the
+// current HCP Terraform instance. It's generally not safe to assume that the workspaces
+// you create in a given test will be within the first page of list results, so
+// you might have to get creative and/or settle for less when testing the
+// behavior of these endpoints.
+
+func TestAdminWorkspaces_ListWithFilter(t *testing.T) {
+	skipUnlessEnterprise(t)
+
+	client := testClient(t)
+	ctx := context.Background()
+
+	org, orgCleanup := createOrganization(t, client)
+	defer orgCleanup()
+
+	wTest1, wTest1Cleanup := createWorkspace(t, client, org)
+	defer wTest1Cleanup()
+
+	wTest2, wTest2Cleanup := createWorkspace(t, client, org)
+	defer wTest2Cleanup()
+
+	t.Run("when filtering workspaces on a current run status", func(t *testing.T) {
+		_, appliedCleanup := createRunApply(t, client, wTest1)
+		t.Cleanup(appliedCleanup)
+
+		_, unAppliedCleanup := createRunUnapplied(t, client, wTest2)
+		t.Cleanup(unAppliedCleanup)
+
+		wl, err := client.Admin.Workspaces.List(ctx, &AdminWorkspaceListOptions{
+			Filter: string(RunApplied), Include: []AdminWorkspaceIncludeOpt{AdminWorkspaceCurrentRun},
+		})
+
+		require.NoError(t, err)
+		require.NotEmpty(t, wl.Items)
+		assert.Equal(t, wl.Items[0].CurrentRun.Status, RunApplied)
+		assert.NotContains(t, wl.Items, wTest2)
+	})
+}
+
+func TestAdminWorkspaces_ListWithSort(t *testing.T) {
+	skipUnlessEnterprise(t)
+
+	client := testClient(t)
+	ctx := context.Background()
+
+	org, orgCleanup := createOrganization(t, client)
+	defer orgCleanup()
+
+	wTest1, wTest1Cleanup := createWorkspace(t, client, org)
+	defer wTest1Cleanup()
+
+	wTest2, wTest2Cleanup := createWorkspace(t, client, org)
+	defer wTest2Cleanup()
+
+	t.Run("when sorting by workspace names", func(t *testing.T) {
+		wl, err := client.Admin.Workspaces.List(ctx, &AdminWorkspaceListOptions{
+			Sort: "name",
+		})
+		require.NoError(t, err)
+		require.NotEmpty(t, wl.Items)
+		require.GreaterOrEqual(t, len(wl.Items), 2)
+		assert.Equal(t, wl.Items[0].Name < wl.Items[1].Name, true)
+	})
+
+	t.Run("when sorting workspaces on current-run.created-at", func(t *testing.T) {
+		_, unappliedCleanup1 := createRunUnapplied(t, client, wTest1)
+		t.Cleanup(unappliedCleanup1)
+
+		_, unappliedCleanup2 := createRunUnapplied(t, client, wTest2)
+		t.Cleanup(unappliedCleanup2)
+
+		wl, err := client.Admin.Workspaces.List(ctx, &AdminWorkspaceListOptions{
+			Include: []AdminWorkspaceIncludeOpt{AdminWorkspaceCurrentRun},
+			Sort:    "current-run.created-at",
+		})
+
+		require.NoError(t, err)
+		require.NotEmpty(t, wl.Items)
+		require.GreaterOrEqual(t, len(wl.Items), 2)
+		assert.True(t, wl.Items[1].CurrentRun.CreatedAt.After(wl.Items[0].CurrentRun.CreatedAt))
+	})
+}
+
 func TestAdminWorkspaces_List(t *testing.T) {
-	skipIfCloud(t)
+	skipUnlessEnterprise(t)
 
 	client := testClient(t)
 	ctx := context.Background()
@@ -33,8 +117,7 @@ func TestAdminWorkspaces_List(t *testing.T) {
 		wl, err := client.Admin.Workspaces.List(ctx, nil)
 		require.NoError(t, err)
 
-		assert.Equal(t, adminWorkspaceItemsContainsID(wl.Items, wTest1.ID), true)
-		assert.Equal(t, adminWorkspaceItemsContainsID(wl.Items, wTest2.ID), true)
+		require.GreaterOrEqual(t, len(wl.Items), 2)
 	})
 
 	t.Run("with list options", func(t *testing.T) {
@@ -91,12 +174,14 @@ func TestAdminWorkspaces_List(t *testing.T) {
 			Include: []AdminWorkspaceIncludeOpt{AdminWorkspaceOrg},
 		})
 
-		assert.NoError(t, err)
-		assert.NotEmpty(t, wl.Items)
-		assert.NotNil(t, wl.Items[0].Organization)
+		require.NoError(t, err)
+		require.NotEmpty(t, wl.Items)
+		require.NotNil(t, wl.Items[0].Organization)
 		assert.NotEmpty(t, wl.Items[0].Organization.Name)
 	})
 
+	// This sub-test should remain last because it creates a run that does not apply
+	// Any subsequent runs will be queued until a timeout is triggered
 	t.Run("with current_run included", func(t *testing.T) {
 		cvTest, cvCleanup := createUploadedConfigurationVersion(t, client, wTest1)
 		defer cvCleanup()
@@ -106,22 +191,22 @@ func TestAdminWorkspaces_List(t *testing.T) {
 			Workspace:            wTest1,
 		}
 		run, err := client.Runs.Create(ctx, runOpts)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		wl, err := client.Admin.Workspaces.List(ctx, &AdminWorkspaceListOptions{
 			Include: []AdminWorkspaceIncludeOpt{AdminWorkspaceCurrentRun},
 		})
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
-		assert.NotEmpty(t, wl.Items)
-		assert.NotNil(t, wl.Items[0].CurrentRun)
+		require.NotEmpty(t, wl.Items)
+		require.NotNil(t, wl.Items[0].CurrentRun)
 		assert.Equal(t, wl.Items[0].CurrentRun.ID, run.ID)
 	})
 }
 
 func TestAdminWorkspaces_Read(t *testing.T) {
-	skipIfCloud(t)
+	skipUnlessEnterprise(t)
 
 	client := testClient(t)
 	ctx := context.Background()
@@ -133,7 +218,7 @@ func TestAdminWorkspaces_Read(t *testing.T) {
 		assert.Nil(t, workspace)
 	})
 
-	t.Run("it fails to read a workspace that is non existant", func(t *testing.T) {
+	t.Run("it fails to read a workspace that is non existent", func(t *testing.T) {
 		workspaceID := fmt.Sprintf("non-existent-%s", randomString(t))
 		adminWorkspace, err := client.Admin.Workspaces.Read(ctx, workspaceID)
 		require.Error(t, err)
@@ -141,7 +226,7 @@ func TestAdminWorkspaces_Read(t *testing.T) {
 		assert.Nil(t, adminWorkspace)
 	})
 
-	t.Run("it reads a worksapce successfully", func(t *testing.T) {
+	t.Run("it reads a workspace successfully", func(t *testing.T) {
 		org, orgCleanup := createOrganization(t, client)
 		defer orgCleanup()
 
@@ -149,8 +234,8 @@ func TestAdminWorkspaces_Read(t *testing.T) {
 		defer workspaceCleanup()
 
 		adminWorkspace, err := client.Admin.Workspaces.Read(ctx, workspace.ID)
-		assert.NoError(t, err)
-		assert.NotNilf(t, adminWorkspace, "Admin Workspace is not nil")
+		require.NoError(t, err)
+		require.NotNilf(t, adminWorkspace, "Admin Workspace is not nil")
 		assert.Equal(t, adminWorkspace.ID, workspace.ID)
 		assert.Equal(t, adminWorkspace.Name, workspace.Name)
 		assert.Equal(t, adminWorkspace.Locked, workspace.Locked)
@@ -158,7 +243,7 @@ func TestAdminWorkspaces_Read(t *testing.T) {
 }
 
 func TestAdminWorkspaces_Delete(t *testing.T) {
-	skipIfCloud(t)
+	skipUnlessEnterprise(t)
 
 	client := testClient(t)
 	ctx := context.Background()
@@ -183,12 +268,12 @@ func TestAdminWorkspaces_Delete(t *testing.T) {
 		workspace, _ := createWorkspace(t, client, org)
 
 		adminWorkspace, err := client.Admin.Workspaces.Read(ctx, workspace.ID)
-		assert.NoError(t, err)
-		assert.NotNilf(t, adminWorkspace, "Admin Workspace is not nil")
+		require.NoError(t, err)
+		require.NotNilf(t, adminWorkspace, "Admin Workspace is not nil")
 		assert.Equal(t, adminWorkspace.ID, workspace.ID)
 
 		err = client.Admin.Workspaces.Delete(ctx, adminWorkspace.ID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// Cannot find deleted workspace
 		_, err = client.Admin.Workspaces.Read(ctx, workspace.ID)

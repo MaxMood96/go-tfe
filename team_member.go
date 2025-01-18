@@ -1,11 +1,12 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
 	"context"
 	"fmt"
 	"net/url"
-
-	retryablehttp "github.com/hashicorp/go-retryablehttp"
 )
 
 // Compile-time proof of interface implementation.
@@ -15,7 +16,7 @@ var _ TeamMembers = (*teamMembers)(nil)
 // Terraform Enterprise API supports.
 //
 // TFE API docs:
-// https://www.terraform.io/docs/cloud/api/team-members.html
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/team-members
 type TeamMembers interface {
 	// List returns all Users of a team calling ListUsers
 	// See ListOrganizationMemberships for fetching memberships
@@ -79,14 +80,14 @@ func (s *teamMembers) ListUsers(ctx context.Context, teamID string) ([]*User, er
 		Include: []TeamIncludeOpt{TeamUsers},
 	}
 
-	u := fmt.Sprintf("teams/%s", url.QueryEscape(teamID))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("teams/%s", url.PathEscape(teamID))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	t := &Team{}
-	err = s.client.do(ctx, req, t)
+	err = req.Do(ctx, t)
 	if err != nil {
 		return nil, err
 	}
@@ -106,14 +107,14 @@ func (s *teamMembers) ListOrganizationMemberships(ctx context.Context, teamID st
 		Include: []TeamIncludeOpt{TeamOrganizationMemberships},
 	}
 
-	u := fmt.Sprintf("teams/%s", url.QueryEscape(teamID))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("teams/%s", url.PathEscape(teamID))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	t := &Team{}
-	err = s.client.do(ctx, req, t)
+	err = req.Do(ctx, t)
 	if err != nil {
 		return nil, err
 	}
@@ -131,9 +132,9 @@ func (s *teamMembers) Add(ctx context.Context, teamID string, options TeamMember
 	}
 
 	usersOrMemberships := options.kind()
-	u := fmt.Sprintf("teams/%s/relationships/%s", url.QueryEscape(teamID), usersOrMemberships)
+	u := fmt.Sprintf("teams/%s/relationships/%s", url.PathEscape(teamID), usersOrMemberships)
 
-	var req *retryablehttp.Request
+	var req *ClientRequest
 
 	if usersOrMemberships == "users" {
 		var err error
@@ -141,7 +142,7 @@ func (s *teamMembers) Add(ctx context.Context, teamID string, options TeamMember
 		for _, name := range options.Usernames {
 			members = append(members, &teamMemberUser{Username: name})
 		}
-		req, err = s.client.newRequest("POST", u, members)
+		req, err = s.client.NewRequest("POST", u, members)
 		if err != nil {
 			return err
 		}
@@ -151,13 +152,13 @@ func (s *teamMembers) Add(ctx context.Context, teamID string, options TeamMember
 		for _, ID := range options.OrganizationMembershipIDs {
 			members = append(members, &teamMemberOrgMembership{ID: ID})
 		}
-		req, err = s.client.newRequest("POST", u, members)
+		req, err = s.client.NewRequest("POST", u, members)
 		if err != nil {
 			return err
 		}
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 // Remove multiple users from a team.
@@ -170,9 +171,9 @@ func (s *teamMembers) Remove(ctx context.Context, teamID string, options TeamMem
 	}
 
 	usersOrMemberships := options.kind()
-	u := fmt.Sprintf("teams/%s/relationships/%s", url.QueryEscape(teamID), usersOrMemberships)
+	u := fmt.Sprintf("teams/%s/relationships/%s", url.PathEscape(teamID), usersOrMemberships)
 
-	var req *retryablehttp.Request
+	var req *ClientRequest
 
 	if usersOrMemberships == "users" {
 		var err error
@@ -180,7 +181,7 @@ func (s *teamMembers) Remove(ctx context.Context, teamID string, options TeamMem
 		for _, name := range options.Usernames {
 			members = append(members, &teamMemberUser{Username: name})
 		}
-		req, err = s.client.newRequest("DELETE", u, members)
+		req, err = s.client.NewRequest("DELETE", u, members)
 		if err != nil {
 			return err
 		}
@@ -190,13 +191,13 @@ func (s *teamMembers) Remove(ctx context.Context, teamID string, options TeamMem
 		for _, ID := range options.OrganizationMembershipIDs {
 			members = append(members, &teamMemberOrgMembership{ID: ID})
 		}
-		req, err = s.client.newRequest("DELETE", u, members)
+		req, err = s.client.NewRequest("DELETE", u, members)
 		if err != nil {
 			return err
 		}
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 // kind returns "users" or "organization-memberships"

@@ -1,16 +1,15 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
-	"io/fs"
+	"io"
 	"net/url"
-	"os"
 	"time"
-
-	slug "github.com/hashicorp/go-slug"
 )
 
 // Compile-time proof of interface implementation.
@@ -20,7 +19,7 @@ var _ ConfigurationVersions = (*configurationVersions)(nil)
 // methods that the Terraform Enterprise API supports.
 //
 // TFE API docs:
-// https://www.terraform.io/docs/enterprise/api/configuration-versions.html
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/configuration-versions
 type ConfigurationVersions interface {
 	// List returns all configuration versions of a workspace.
 	List(ctx context.Context, workspaceID string, options *ConfigurationVersionListOptions) (*ConfigurationVersionList, error)
@@ -28,6 +27,13 @@ type ConfigurationVersions interface {
 	// Create is used to create a new configuration version. The created
 	// configuration version will be usable once data is uploaded to it.
 	Create(ctx context.Context, workspaceID string, options ConfigurationVersionCreateOptions) (*ConfigurationVersion, error)
+
+	// CreateForRegistryModule is used to create a new configuration version
+	// keyed to a registry module instead of a workspace. The created
+	// configuration version will be usable once data is uploaded to it.
+	//
+	// **Note: This function is still in BETA and subject to change.**
+	CreateForRegistryModule(ctx context.Context, moduleID RegistryModuleID) (*ConfigurationVersion, error)
 
 	// Read a configuration version by its ID.
 	Read(ctx context.Context, cvID string) (*ConfigurationVersion, error)
@@ -40,12 +46,27 @@ type ConfigurationVersions interface {
 	// configuration files on disk.
 	Upload(ctx context.Context, url string, path string) error
 
+	// Upload a tar gzip archive to the specified configuration version upload URL.
+	UploadTarGzip(ctx context.Context, url string, archive io.Reader) error
+
 	// Archive a configuration version. This can only be done on configuration versions that
 	// were created with the API or CLI, are in an uploaded state, and have no runs in progress.
 	Archive(ctx context.Context, cvID string) error
 
 	// Download a configuration version.  Only configuration versions in the uploaded state may be downloaded.
 	Download(ctx context.Context, cvID string) ([]byte, error)
+
+	// SoftDeleteBackingData soft deletes the configuration version's backing data
+	// **Note: This functionality is only available in Terraform Enterprise.**
+	SoftDeleteBackingData(ctx context.Context, svID string) error
+
+	// RestoreBackingData restores a soft deleted configuration version's backing data
+	// **Note: This functionality is only available in Terraform Enterprise.**
+	RestoreBackingData(ctx context.Context, svID string) error
+
+	// PermanentlyDeleteBackingData permanently deletes a soft deleted configuration version's backing data
+	// **Note: This functionality is only available in Terraform Enterprise.**
+	PermanentlyDeleteBackingData(ctx context.Context, svID string) error
 }
 
 // configurationVersions implements ConfigurationVersions.
@@ -74,6 +95,7 @@ const (
 	ConfigurationSourceBitbucket ConfigurationSource = "bitbucket"
 	ConfigurationSourceGithub    ConfigurationSource = "github"
 	ConfigurationSourceGitlab    ConfigurationSource = "gitlab"
+	ConfigurationSourceAdo       ConfigurationSource = "ado"
 	ConfigurationSourceTerraform ConfigurationSource = "terraform"
 )
 
@@ -92,7 +114,8 @@ type ConfigurationVersion struct {
 	Error            string              `jsonapi:"attr,error"`
 	ErrorMessage     string              `jsonapi:"attr,error-message"`
 	Source           ConfigurationSource `jsonapi:"attr,source"`
-	Speculative      bool                `jsonapi:"attr,speculative "`
+	Speculative      bool                `jsonapi:"attr,speculative"`
+	Provisional      bool                `jsonapi:"attr,provisional"`
 	Status           ConfigurationStatus `jsonapi:"attr,status"`
 	StatusTimestamps *CVStatusTimestamps `jsonapi:"attr,status-timestamps"`
 	UploadURL        string              `jsonapi:"attr,upload-url"`
@@ -112,7 +135,7 @@ type CVStatusTimestamps struct {
 }
 
 // ConfigVerIncludeOpt represents the available options for include query params.
-// https://www.terraform.io/docs/cloud/api/configuration-versions.html#available-related-resources
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/configuration-versions#available-related-resources
 type ConfigVerIncludeOpt string
 
 const (
@@ -123,7 +146,7 @@ const (
 // ConfigurationVersionReadOptions represents the options for reading a configuration version.
 type ConfigurationVersionReadOptions struct {
 	// Optional: A list of relations to include. See available resources:
-	// https://www.terraform.io/docs/cloud/api/configuration-versions.html#available-related-resources
+	// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/configuration-versions#available-related-resources
 	Include []ConfigVerIncludeOpt `url:"include,omitempty"`
 }
 
@@ -132,7 +155,7 @@ type ConfigurationVersionReadOptions struct {
 type ConfigurationVersionListOptions struct {
 	ListOptions
 	// Optional: A list of relations to include. See available resources:
-	// https://www.terraform.io/docs/cloud/api/configuration-versions.html#available-related-resources
+	// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/configuration-versions#available-related-resources
 	Include []ConfigVerIncludeOpt `url:"include,omitempty"`
 }
 
@@ -151,6 +174,10 @@ type ConfigurationVersionCreateOptions struct {
 
 	// Optional: When true, this configuration version can only be used for planning.
 	Speculative *bool `jsonapi:"attr,speculative,omitempty"`
+
+	// Optional: When true, does not become the workspace's current configuration until
+	// a run referencing it is ultimately applied.
+	Provisional *bool `jsonapi:"attr,provisional,omitempty"`
 }
 
 // IngressAttributes include commit information associated with configuration versions sourced from VCS.
@@ -187,14 +214,14 @@ func (s *configurationVersions) List(ctx context.Context, workspaceID string, op
 		return nil, err
 	}
 
-	u := fmt.Sprintf("workspaces/%s/configuration-versions", url.QueryEscape(workspaceID))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("workspaces/%s/configuration-versions", url.PathEscape(workspaceID))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	cvl := &ConfigurationVersionList{}
-	err = s.client.do(ctx, req, cvl)
+	err = req.Do(ctx, cvl)
 	if err != nil {
 		return nil, err
 	}
@@ -209,14 +236,34 @@ func (s *configurationVersions) Create(ctx context.Context, workspaceID string, 
 		return nil, ErrInvalidWorkspaceID
 	}
 
-	u := fmt.Sprintf("workspaces/%s/configuration-versions", url.QueryEscape(workspaceID))
-	req, err := s.client.newRequest("POST", u, &options)
+	u := fmt.Sprintf("workspaces/%s/configuration-versions", url.PathEscape(workspaceID))
+	req, err := s.client.NewRequest("POST", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	cv := &ConfigurationVersion{}
-	err = s.client.do(ctx, req, cv)
+	err = req.Do(ctx, cv)
+	if err != nil {
+		return nil, err
+	}
+
+	return cv, nil
+}
+
+func (s *configurationVersions) CreateForRegistryModule(ctx context.Context, moduleID RegistryModuleID) (*ConfigurationVersion, error) {
+	if err := moduleID.valid(); err != nil {
+		return nil, err
+	}
+
+	u := fmt.Sprintf("%s/configuration-versions", testRunsPath(moduleID))
+	req, err := s.client.NewRequest("POST", u, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	cv := &ConfigurationVersion{}
+	err = req.Do(ctx, cv)
 	if err != nil {
 		return nil, err
 	}
@@ -238,14 +285,14 @@ func (s *configurationVersions) ReadWithOptions(ctx context.Context, cvID string
 		return nil, err
 	}
 
-	u := fmt.Sprintf("configuration-versions/%s", url.QueryEscape(cvID))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("configuration-versions/%s", url.PathEscape(cvID))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	cv := &ConfigurationVersion{}
-	err = s.client.do(ctx, req, cv)
+	err = req.Do(ctx, cv)
 	if err != nil {
 		return nil, err
 	}
@@ -256,33 +303,23 @@ func (s *configurationVersions) ReadWithOptions(ctx context.Context, cvID string
 // Upload packages and uploads Terraform configuration files. It requires the
 // upload URL from a configuration version and the path to the configuration
 // files on disk.
-func (s *configurationVersions) Upload(ctx context.Context, u, path string) error {
-	file, err := os.Stat(path)
-
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf(`failed to find terraform configuration files under the path "%v": %w`, path, err)
-		}
-		return fmt.Errorf(`unable to upload terraform configuration files from the path "%v": %w`, path, err)
-	}
-
-	if !file.Mode().IsDir() {
-		return ErrMissingDirectory
-	}
-
-	body := bytes.NewBuffer(nil)
-
-	_, err = slug.Pack(path, body, true)
+func (s *configurationVersions) Upload(ctx context.Context, uploadURL, path string) error {
+	body, err := packContents(path)
 	if err != nil {
 		return err
 	}
 
-	req, err := s.client.newRequest("PUT", u, body)
-	if err != nil {
-		return err
-	}
+	return s.UploadTarGzip(ctx, uploadURL, body)
+}
 
-	return s.client.do(ctx, req, nil)
+// UploadTarGzip is used to upload Terraform configuration files contained a tar gzip archive.
+// Any stream implementing io.Reader can be passed into this method. This method is also
+// particularly useful for tar streams created by non-default go-slug configurations.
+//
+// **Note**: This method does not validate the content being uploaded and is therefore the caller's
+// responsibility to ensure the raw content is a valid Terraform configuration.
+func (s *configurationVersions) UploadTarGzip(ctx context.Context, uploadURL string, archive io.Reader) error {
+	return s.client.doForeignPUTRequest(ctx, uploadURL, archive)
 }
 
 // Archive a configuration version. This can only be done on configuration versions that
@@ -294,49 +331,20 @@ func (s *configurationVersions) Archive(ctx context.Context, cvID string) error 
 
 	body := bytes.NewBuffer(nil)
 
-	u := fmt.Sprintf("configuration-versions/%s/actions/archive", url.QueryEscape(cvID))
-	req, err := s.client.newRequest("POST", u, body)
+	u := fmt.Sprintf("configuration-versions/%s/actions/archive", url.PathEscape(cvID))
+	req, err := s.client.NewRequest("POST", u, body)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 func (o *ConfigurationVersionReadOptions) valid() error {
-	if o == nil {
-		return nil // nothing to validate
-	}
-
-	if err := validateConfigVerIncludeParams(o.Include); err != nil {
-		return err
-	}
-
 	return nil
 }
 
 func (o *ConfigurationVersionListOptions) valid() error {
-	if o == nil {
-		return nil // nothing to validate
-	}
-
-	if err := validateConfigVerIncludeParams(o.Include); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func validateConfigVerIncludeParams(params []ConfigVerIncludeOpt) error {
-	for _, p := range params {
-		switch p {
-		case ConfigVerIngressAttributes, ConfigVerRun:
-			// do nothing
-		default:
-			return ErrInvalidIncludeValue
-		}
-	}
-
 	return nil
 }
 
@@ -346,17 +354,43 @@ func (s *configurationVersions) Download(ctx context.Context, cvID string) ([]by
 		return nil, ErrInvalidConfigVersionID
 	}
 
-	u := fmt.Sprintf("configuration-versions/%s/download", url.QueryEscape(cvID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("configuration-versions/%s/download", url.PathEscape(cvID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	var buf bytes.Buffer
-	err = s.client.do(ctx, req, &buf)
+	err = req.Do(ctx, &buf)
 	if err != nil {
 		return nil, err
 	}
 
 	return buf.Bytes(), nil
+}
+
+func (s *configurationVersions) SoftDeleteBackingData(ctx context.Context, cvID string) error {
+	return s.manageBackingData(ctx, cvID, "soft_delete_backing_data")
+}
+
+func (s *configurationVersions) RestoreBackingData(ctx context.Context, cvID string) error {
+	return s.manageBackingData(ctx, cvID, "restore_backing_data")
+}
+
+func (s *configurationVersions) PermanentlyDeleteBackingData(ctx context.Context, cvID string) error {
+	return s.manageBackingData(ctx, cvID, "permanently_delete_backing_data")
+}
+
+func (s *configurationVersions) manageBackingData(ctx context.Context, cvID, action string) error {
+	if !validStringID(&cvID) {
+		return ErrInvalidConfigVersionID
+	}
+
+	u := fmt.Sprintf("configuration-versions/%s/actions/%s", cvID, action)
+	req, err := s.client.NewRequest("POST", u, nil)
+	if err != nil {
+		return err
+	}
+
+	return req.Do(ctx, nil)
 }

@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -13,7 +16,7 @@ var _ SSHKeys = (*sshKeys)(nil)
 // Enterprise API supports.
 //
 // TFE API docs:
-// https://www.terraform.io/docs/cloud/api/ssh-keys.html
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/ssh-keys
 type SSHKeys interface {
 	// List all the SSH keys for a given organization
 	List(ctx context.Context, organization string, options *SSHKeyListOptions) (*SSHKeyList, error)
@@ -83,14 +86,14 @@ func (s *sshKeys) List(ctx context.Context, organization string, options *SSHKey
 		return nil, ErrInvalidOrg
 	}
 
-	u := fmt.Sprintf("organizations/%s/ssh-keys", url.QueryEscape(organization))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("organizations/%s/ssh-keys", url.PathEscape(organization))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	kl := &SSHKeyList{}
-	err = s.client.do(ctx, req, kl)
+	err = req.Do(ctx, kl)
 	if err != nil {
 		return nil, err
 	}
@@ -108,14 +111,14 @@ func (s *sshKeys) Create(ctx context.Context, organization string, options SSHKe
 		return nil, err
 	}
 
-	u := fmt.Sprintf("organizations/%s/ssh-keys", url.QueryEscape(organization))
-	req, err := s.client.newRequest("POST", u, &options)
+	u := fmt.Sprintf("organizations/%s/ssh-keys", url.PathEscape(organization))
+	req, err := s.client.NewRequest("POST", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	k := &SSHKey{}
-	err = s.client.do(ctx, req, k)
+	err = req.Do(ctx, k)
 	if err != nil {
 		return nil, err
 	}
@@ -129,14 +132,14 @@ func (s *sshKeys) Read(ctx context.Context, sshKeyID string) (*SSHKey, error) {
 		return nil, ErrInvalidSHHKeyID
 	}
 
-	u := fmt.Sprintf("ssh-keys/%s", url.QueryEscape(sshKeyID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("ssh-keys/%s", url.PathEscape(sshKeyID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	k := &SSHKey{}
-	err = s.client.do(ctx, req, k)
+	err = req.Do(ctx, k)
 	if err != nil {
 		return nil, err
 	}
@@ -150,14 +153,14 @@ func (s *sshKeys) Update(ctx context.Context, sshKeyID string, options SSHKeyUpd
 		return nil, ErrInvalidSHHKeyID
 	}
 
-	u := fmt.Sprintf("ssh-keys/%s", url.QueryEscape(sshKeyID))
-	req, err := s.client.newRequest("PATCH", u, &options)
+	u := fmt.Sprintf("ssh-keys/%s", url.PathEscape(sshKeyID))
+	req, err := s.client.NewRequest("PATCH", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	k := &SSHKey{}
-	err = s.client.do(ctx, req, k)
+	err = req.Do(ctx, k)
 	if err != nil {
 		return nil, err
 	}
@@ -171,13 +174,13 @@ func (s *sshKeys) Delete(ctx context.Context, sshKeyID string) error {
 		return ErrInvalidSHHKeyID
 	}
 
-	u := fmt.Sprintf("ssh-keys/%s", url.QueryEscape(sshKeyID))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("ssh-keys/%s", url.PathEscape(sshKeyID))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 func (o SSHKeyCreateOptions) valid() error {

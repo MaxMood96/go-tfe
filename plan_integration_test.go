@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"testing"
 	"time"
 
@@ -59,7 +59,7 @@ func TestPlansLogs(t *testing.T) {
 		logReader, err := client.Plans.Logs(ctx, p.ID)
 		require.NoError(t, err)
 
-		logs, err := ioutil.ReadAll(logReader)
+		logs, err := io.ReadAll(logReader)
 		require.NoError(t, err)
 
 		assert.Contains(t, string(logs), "1 to add, 0 to change, 0 to destroy")

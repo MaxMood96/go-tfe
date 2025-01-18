@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -12,7 +15,7 @@ var _ AdminOrganizations = (*adminOrganizations)(nil)
 // AdminOrganizations describes all of the admin organization related methods that the Terraform
 // Enterprise API supports. Note that admin settings are only available in Terraform Enterprise.
 //
-// TFE API docs: https://www.terraform.io/docs/cloud/api/admin/organizations.html
+// TFE API docs: https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/organizations
 type AdminOrganizations interface {
 	// List all the organizations visible to the current user.
 	List(ctx context.Context, options *AdminOrganizationListOptions) (*AdminOrganizationList, error)
@@ -44,26 +47,34 @@ type AdminOrganization struct {
 	AccessBetaTools                  bool   `jsonapi:"attr,access-beta-tools"`
 	ExternalID                       string `jsonapi:"attr,external-id"`
 	GlobalModuleSharing              *bool  `jsonapi:"attr,global-module-sharing"`
+	GlobalProviderSharing            *bool  `jsonapi:"attr,global-provider-sharing"`
 	IsDisabled                       bool   `jsonapi:"attr,is-disabled"`
 	NotificationEmail                string `jsonapi:"attr,notification-email"`
 	SsoEnabled                       bool   `jsonapi:"attr,sso-enabled"`
 	TerraformBuildWorkerApplyTimeout string `jsonapi:"attr,terraform-build-worker-apply-timeout"`
 	TerraformBuildWorkerPlanTimeout  string `jsonapi:"attr,terraform-build-worker-plan-timeout"`
+	ApplyTimeout                     string `jsonapi:"attr,apply-timeout"`
+	PlanTimeout                      string `jsonapi:"attr,plan-timeout"`
 	TerraformWorkerSudoEnabled       bool   `jsonapi:"attr,terraform-worker-sudo-enabled"`
+	WorkspaceLimit                   *int   `jsonapi:"attr,workspace-limit"`
 
 	// Relations
 	Owners []*User `jsonapi:"relation,owners"`
 }
 
 // AdminOrganizationUpdateOptions represents the admin options for updating an organization.
-// https://www.terraform.io/docs/cloud/api/admin/organizations.html#request-body
+// https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/organizations#request-body
 type AdminOrganizationUpdateOptions struct {
 	AccessBetaTools                  *bool   `jsonapi:"attr,access-beta-tools,omitempty"`
 	GlobalModuleSharing              *bool   `jsonapi:"attr,global-module-sharing,omitempty"`
+	GlobalProviderSharing            *bool   `jsonapi:"attr,global-provider-sharing,omitempty"`
 	IsDisabled                       *bool   `jsonapi:"attr,is-disabled,omitempty"`
 	TerraformBuildWorkerApplyTimeout *string `jsonapi:"attr,terraform-build-worker-apply-timeout,omitempty"`
 	TerraformBuildWorkerPlanTimeout  *string `jsonapi:"attr,terraform-build-worker-plan-timeout,omitempty"`
+	ApplyTimeout                     *string `jsonapi:"attr,apply-timeout,omitempty"`
+	PlanTimeout                      *string `jsonapi:"attr,plan-timeout,omitempty"`
 	TerraformWorkerSudoEnabled       bool    `jsonapi:"attr,terraform-worker-sudo-enabled,omitempty"`
+	WorkspaceLimit                   *int    `jsonapi:"attr,workspace-limit,omitempty"`
 }
 
 // AdminOrganizationList represents a list of organizations via Admin API.
@@ -73,7 +84,7 @@ type AdminOrganizationList struct {
 }
 
 // AdminOrgIncludeOpt represents the available options for include query params.
-// https://www.terraform.io/docs/cloud/api/admin/organizations.html#available-related-resources
+// https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/organizations#available-related-resources
 type AdminOrgIncludeOpt string
 
 const AdminOrgOwners AdminOrgIncludeOpt = "owners"
@@ -86,7 +97,7 @@ type AdminOrganizationListOptions struct {
 	// Any organizations with a name or notification email partially matching this value will be returned.
 	Query string `url:"q,omitempty"`
 	// Optional: A list of relations to include. See available resources
-	// https://www.terraform.io/docs/cloud/api/admin/organizations.html#available-related-resources
+	// https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/organizations#available-related-resources
 	Include []AdminOrgIncludeOpt `url:"include,omitempty"`
 }
 
@@ -105,13 +116,13 @@ func (s *adminOrganizations) List(ctx context.Context, options *AdminOrganizatio
 		return nil, err
 	}
 	u := "admin/organizations"
-	req, err := s.client.newRequest("GET", u, options)
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	orgl := &AdminOrganizationList{}
-	err = s.client.do(ctx, req, orgl)
+	err = req.Do(ctx, orgl)
 	if err != nil {
 		return nil, err
 	}
@@ -125,15 +136,15 @@ func (s *adminOrganizations) ListModuleConsumers(ctx context.Context, organizati
 		return nil, ErrInvalidOrg
 	}
 
-	u := fmt.Sprintf("admin/organizations/%s/relationships/module-consumers", url.QueryEscape(organization))
+	u := fmt.Sprintf("admin/organizations/%s/relationships/module-consumers", url.PathEscape(organization))
 
-	req, err := s.client.newRequest("GET", u, nil)
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	orgl := &AdminOrganizationList{}
-	err = s.client.do(ctx, req, orgl)
+	err = req.Do(ctx, orgl)
 	if err != nil {
 		return nil, err
 	}
@@ -147,14 +158,14 @@ func (s *adminOrganizations) Read(ctx context.Context, organization string) (*Ad
 		return nil, ErrInvalidOrg
 	}
 
-	u := fmt.Sprintf("admin/organizations/%s", url.QueryEscape(organization))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("admin/organizations/%s", url.PathEscape(organization))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	org := &AdminOrganization{}
-	err = s.client.do(ctx, req, org)
+	err = req.Do(ctx, org)
 	if err != nil {
 		return nil, err
 	}
@@ -168,14 +179,14 @@ func (s *adminOrganizations) Update(ctx context.Context, organization string, op
 		return nil, ErrInvalidOrg
 	}
 
-	u := fmt.Sprintf("admin/organizations/%s", url.QueryEscape(organization))
-	req, err := s.client.newRequest("PATCH", u, &options)
+	u := fmt.Sprintf("admin/organizations/%s", url.PathEscape(organization))
+	req, err := s.client.NewRequest("PATCH", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	org := &AdminOrganization{}
-	err = s.client.do(ctx, req, org)
+	err = req.Do(ctx, org)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +200,7 @@ func (s *adminOrganizations) UpdateModuleConsumers(ctx context.Context, organiza
 		return ErrInvalidOrg
 	}
 
-	u := fmt.Sprintf("admin/organizations/%s/relationships/module-consumers", url.QueryEscape(organization))
+	u := fmt.Sprintf("admin/organizations/%s/relationships/module-consumers", url.PathEscape(organization))
 
 	var organizations []*AdminOrganizationID
 	for _, id := range consumerOrganizationIDs {
@@ -199,12 +210,12 @@ func (s *adminOrganizations) UpdateModuleConsumers(ctx context.Context, organiza
 		organizations = append(organizations, &AdminOrganizationID{ID: id})
 	}
 
-	req, err := s.client.newRequest("PATCH", u, organizations)
+	req, err := s.client.NewRequest("PATCH", u, organizations)
 	if err != nil {
 		return err
 	}
 
-	err = s.client.do(ctx, req, nil)
+	err = req.Do(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -218,36 +229,15 @@ func (s *adminOrganizations) Delete(ctx context.Context, organization string) er
 		return ErrInvalidOrg
 	}
 
-	u := fmt.Sprintf("admin/organizations/%s", url.QueryEscape(organization))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("admin/organizations/%s", url.PathEscape(organization))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 func (o *AdminOrganizationListOptions) valid() error {
-	if o == nil {
-		return nil // nothing to validate
-	}
-
-	if err := validateAdminOrgIncludeParams(o.Include); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func validateAdminOrgIncludeParams(params []AdminOrgIncludeOpt) error {
-	for _, p := range params {
-		switch p {
-		case AdminOrgOwners:
-			// do nothing
-		default:
-			return ErrInvalidIncludeValue
-		}
-	}
-
 	return nil
 }

@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -9,10 +12,10 @@ import (
 // Compile-time proof of interface implementation.
 var _ AgentPools = (*agentPools)(nil)
 
-// AgentPools describes all the agent pool related methods that the Terraform
-// Cloud API supports. Note that agents are not available in Terraform Enterprise.
+// AgentPools describes all the agent pool related methods that the HCP Terraform
+// API supports. Note that agents are not available in Terraform Enterprise.
 //
-// TFE API docs: https://www.terraform.io/docs/cloud/api/agents.html
+// TFE API docs: https://developer.hashicorp.com/terraform/cloud-docs/api-docs/agents
 type AgentPools interface {
 	// List all the agent pools of the given organization.
 	List(ctx context.Context, organization string, options *AgentPoolListOptions) (*AgentPoolList, error)
@@ -20,14 +23,17 @@ type AgentPools interface {
 	// Create a new agent pool with the given options.
 	Create(ctx context.Context, organization string, options AgentPoolCreateOptions) (*AgentPool, error)
 
-	// Read a agent pool by its ID.
+	// Read an agent pool by its ID.
 	Read(ctx context.Context, agentPoolID string) (*AgentPool, error)
 
-	// Read a agent pool by its ID with the given options.
+	// Read an agent pool by its ID with the given options.
 	ReadWithOptions(ctx context.Context, agentPoolID string, options *AgentPoolReadOptions) (*AgentPool, error)
 
 	// Update an agent pool by its ID.
 	Update(ctx context.Context, agentPool string, options AgentPoolUpdateOptions) (*AgentPool, error)
+
+	// UpdateAllowedWorkspaces updates the list of allowed workspaces associated with an agent pool.
+	UpdateAllowedWorkspaces(ctx context.Context, agentPool string, options AgentPoolAllowedWorkspacesUpdateOptions) (*AgentPool, error)
 
 	// Delete an agent pool by its ID.
 	Delete(ctx context.Context, agentPoolID string) error
@@ -44,17 +50,21 @@ type AgentPoolList struct {
 	Items []*AgentPool
 }
 
-// AgentPool represents a Terraform Cloud agent pool.
+// AgentPool represents a HCP Terraform agent pool.
 type AgentPool struct {
-	ID   string `jsonapi:"primary,agent-pools"`
-	Name string `jsonapi:"attr,name"`
+	ID                 string `jsonapi:"primary,agent-pools"`
+	Name               string `jsonapi:"attr,name"`
+	AgentCount         int    `jsonapi:"attr,agent-count"`
+	OrganizationScoped bool   `jsonapi:"attr,organization-scoped"`
 
 	// Relations
-	Organization *Organization `jsonapi:"relation,organization"`
-	Workspaces   []*Workspace  `jsonapi:"relation,workspaces"`
+	Organization      *Organization `jsonapi:"relation,organization"`
+	Workspaces        []*Workspace  `jsonapi:"relation,workspaces"`
+	AllowedWorkspaces []*Workspace  `jsonapi:"relation,allowed-workspaces"`
 }
 
 // A list of relations to include
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/agents#available-related-resources
 type AgentPoolIncludeOpt string
 
 const AgentPoolWorkspaces AgentPoolIncludeOpt = "workspaces"
@@ -66,7 +76,15 @@ type AgentPoolReadOptions struct {
 // AgentPoolListOptions represents the options for listing agent pools.
 type AgentPoolListOptions struct {
 	ListOptions
+	// Optional: A list of relations to include. See available resources
+	// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/agents#available-related-resources
 	Include []AgentPoolIncludeOpt `url:"include,omitempty"`
+
+	// Optional: A search query string used to filter agent pool. Agent pools are searchable by name
+	Query string `url:"q,omitempty"`
+
+	// Optional: String (workspace name) used to filter the results.
+	AllowedWorkspacesName string `url:"filter[allowed_workspaces][name],omitempty"`
 }
 
 // AgentPoolCreateOptions represents the options for creating an agent pool.
@@ -79,6 +97,12 @@ type AgentPoolCreateOptions struct {
 
 	// Required: A name to identify the agent pool.
 	Name *string `jsonapi:"attr,name"`
+
+	// True if the agent pool is organization scoped, false otherwise.
+	OrganizationScoped *bool `jsonapi:"attr,organization-scoped,omitempty"`
+
+	// List of workspaces that are associated with an agent pool.
+	AllowedWorkspaces []*Workspace `jsonapi:"relation,allowed-workspaces,omitempty"`
 }
 
 // List all the agent pools of the given organization.
@@ -90,14 +114,14 @@ func (s *agentPools) List(ctx context.Context, organization string, options *Age
 		return nil, err
 	}
 
-	u := fmt.Sprintf("organizations/%s/agent-pools", url.QueryEscape(organization))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("organizations/%s/agent-pools", url.PathEscape(organization))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	poolList := &AgentPoolList{}
-	err = s.client.do(ctx, req, poolList)
+	err = req.Do(ctx, poolList)
 	if err != nil {
 		return nil, err
 	}
@@ -115,14 +139,14 @@ func (s *agentPools) Create(ctx context.Context, organization string, options Ag
 		return nil, err
 	}
 
-	u := fmt.Sprintf("organizations/%s/agent-pools", url.QueryEscape(organization))
-	req, err := s.client.newRequest("POST", u, &options)
+	u := fmt.Sprintf("organizations/%s/agent-pools", url.PathEscape(organization))
+	req, err := s.client.NewRequest("POST", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	pool := &AgentPool{}
-	err = s.client.do(ctx, req, pool)
+	err = req.Do(ctx, pool)
 	if err != nil {
 		return nil, err
 	}
@@ -144,14 +168,14 @@ func (s *agentPools) ReadWithOptions(ctx context.Context, agentpoolID string, op
 		return nil, err
 	}
 
-	u := fmt.Sprintf("agent-pools/%s", url.QueryEscape(agentpoolID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("agent-pools/%s", url.PathEscape(agentpoolID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	pool := &AgentPool{}
-	err = s.client.do(ctx, req, pool)
+	err = req.Do(ctx, pool)
 	if err != nil {
 		return nil, err
 	}
@@ -168,10 +192,29 @@ type AgentPoolUpdateOptions struct {
 	Type string `jsonapi:"primary,agent-pools"`
 
 	// A new name to identify the agent pool.
-	Name *string `jsonapi:"attr,name"`
+	Name *string `jsonapi:"attr,name,omitempty"`
+
+	// True if the agent pool is organization scoped, false otherwise.
+	OrganizationScoped *bool `jsonapi:"attr,organization-scoped,omitempty"`
+
+	// A new list of workspaces that are associated with an agent pool.
+	AllowedWorkspaces []*Workspace `jsonapi:"relation,allowed-workspaces,omitempty"`
+}
+
+// AgentPoolUpdateAllowedWorkspacesOptions represents the options for updating the allowed workspace on an agent pool
+type AgentPoolAllowedWorkspacesUpdateOptions struct {
+	// Type is a public field utilized by JSON:API to
+	// set the resource type via the field tag.
+	// It is not a user-defined value and does not need to be set.
+	// https://jsonapi.org/format/#crud-creating
+	Type string `jsonapi:"primary,agent-pools"`
+
+	// A new list of workspaces that are associated with an agent pool.
+	AllowedWorkspaces []*Workspace `jsonapi:"relation,allowed-workspaces"`
 }
 
 // Update an agent pool by its ID.
+// **Note:** This method cannot be used to clear the allowed workspaces field, instead use UpdateAllowedWorkspaces
 func (s *agentPools) Update(ctx context.Context, agentPoolID string, options AgentPoolUpdateOptions) (*AgentPool, error) {
 	if !validStringID(&agentPoolID) {
 		return nil, ErrInvalidAgentPoolID
@@ -181,14 +224,34 @@ func (s *agentPools) Update(ctx context.Context, agentPoolID string, options Age
 		return nil, err
 	}
 
-	u := fmt.Sprintf("agent-pools/%s", url.QueryEscape(agentPoolID))
-	req, err := s.client.newRequest("PATCH", u, &options)
+	u := fmt.Sprintf("agent-pools/%s", url.PathEscape(agentPoolID))
+	req, err := s.client.NewRequest("PATCH", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	k := &AgentPool{}
-	err = s.client.do(ctx, req, k)
+	err = req.Do(ctx, k)
+	if err != nil {
+		return nil, err
+	}
+
+	return k, nil
+}
+
+func (s *agentPools) UpdateAllowedWorkspaces(ctx context.Context, agentPoolID string, options AgentPoolAllowedWorkspacesUpdateOptions) (*AgentPool, error) {
+	if !validStringID(&agentPoolID) {
+		return nil, ErrInvalidAgentPoolID
+	}
+
+	u := fmt.Sprintf("agent-pools/%s", url.PathEscape(agentPoolID))
+	req, err := s.client.NewRequest("PATCH", u, &options)
+	if err != nil {
+		return nil, err
+	}
+
+	k := &AgentPool{}
+	err = req.Do(ctx, k)
 	if err != nil {
 		return nil, err
 	}
@@ -202,13 +265,13 @@ func (s *agentPools) Delete(ctx context.Context, agentPoolID string) error {
 		return ErrInvalidAgentPoolID
 	}
 
-	u := fmt.Sprintf("agent-pools/%s", url.QueryEscape(agentPoolID))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("agent-pools/%s", url.PathEscape(agentPoolID))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 func (o AgentPoolCreateOptions) valid() error {
@@ -229,36 +292,9 @@ func (o AgentPoolUpdateOptions) valid() error {
 }
 
 func (o *AgentPoolReadOptions) valid() error {
-	if o == nil {
-		return nil // nothing to validate
-	}
-	if err := validateAgentPoolIncludeParams(o.Include); err != nil {
-		return err
-	}
-
 	return nil
 }
 
 func (o *AgentPoolListOptions) valid() error {
-	if o == nil {
-		return nil // nothing to validate
-	}
-	if err := validateAgentPoolIncludeParams(o.Include); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func validateAgentPoolIncludeParams(params []AgentPoolIncludeOpt) error {
-	for _, p := range params {
-		switch p {
-		case AgentPoolWorkspaces:
-			// do nothing
-		default:
-			return ErrInvalidIncludeValue
-		}
-	}
-
 	return nil
 }

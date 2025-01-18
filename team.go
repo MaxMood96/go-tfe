@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -12,7 +15,7 @@ var _ Teams = (*teams)(nil)
 // Teams describes all the team related methods that the Terraform
 // Enterprise API supports.
 //
-// TFE API docs: https://www.terraform.io/docs/cloud/api/teams.html
+// TFE API docs: https://developer.hashicorp.com/terraform/cloud-docs/api-docs/teams
 type Teams interface {
 	// List all the teams of the given organization.
 	List(ctx context.Context, organization string, options *TeamListOptions) (*TeamList, error)
@@ -44,12 +47,15 @@ type TeamList struct {
 // Team represents a Terraform Enterprise team.
 type Team struct {
 	ID                 string              `jsonapi:"primary,teams"`
+	IsUnified          bool                `jsonapi:"attr,is-unified"`
 	Name               string              `jsonapi:"attr,name"`
 	OrganizationAccess *OrganizationAccess `jsonapi:"attr,organization-access"`
 	Visibility         string              `jsonapi:"attr,visibility"`
 	Permissions        *TeamPermissions    `jsonapi:"attr,permissions"`
 	UserCount          int                 `jsonapi:"attr,users-count"`
-	SSOTeamID          *string             `jsonapi:"attr,sso-team-id"`
+	SSOTeamID          string              `jsonapi:"attr,sso-team-id"`
+	// AllowMemberTokenManagement is false for TFE versions older than v202408
+	AllowMemberTokenManagement bool `jsonapi:"attr,allow-member-token-management"`
 
 	// Relations
 	Users                   []*User                   `jsonapi:"relation,users"`
@@ -58,12 +64,21 @@ type Team struct {
 
 // OrganizationAccess represents the team's permissions on its organization
 type OrganizationAccess struct {
-	ManagePolicies        bool `jsonapi:"attr,manage-policies"`
-	ManagePolicyOverrides bool `jsonapi:"attr,manage-policy-overrides"`
-	ManageWorkspaces      bool `jsonapi:"attr,manage-workspaces"`
-	ManageVCSSettings     bool `jsonapi:"attr,manage-vcs-settings"`
-	ManageProviders       bool `jsonapi:"attr,manage-providers"`
-	ManageModules         bool `jsonapi:"attr,manage-modules"`
+	ManagePolicies           bool `jsonapi:"attr,manage-policies"`
+	ManagePolicyOverrides    bool `jsonapi:"attr,manage-policy-overrides"`
+	ManageWorkspaces         bool `jsonapi:"attr,manage-workspaces"`
+	ManageVCSSettings        bool `jsonapi:"attr,manage-vcs-settings"`
+	ManageProviders          bool `jsonapi:"attr,manage-providers"`
+	ManageModules            bool `jsonapi:"attr,manage-modules"`
+	ManageRunTasks           bool `jsonapi:"attr,manage-run-tasks"`
+	ManageProjects           bool `jsonapi:"attr,manage-projects"`
+	ReadWorkspaces           bool `jsonapi:"attr,read-workspaces"`
+	ReadProjects             bool `jsonapi:"attr,read-projects"`
+	ManageMembership         bool `jsonapi:"attr,manage-membership"`
+	ManageTeams              bool `jsonapi:"attr,manage-teams"`
+	ManageOrganizationAccess bool `jsonapi:"attr,manage-organization-access"`
+	AccessSecretTeams        bool `jsonapi:"attr,access-secret-teams"`
+	ManageAgentPools         bool `jsonapi:"attr,manage-agent-pools"`
 }
 
 // TeamPermissions represents the current user's permissions on the team.
@@ -73,7 +88,7 @@ type TeamPermissions struct {
 }
 
 // TeamIncludeOpt represents the available options for include query params.
-// https://www.terraform.io/docs/cloud/api/teams.html#available-related-resources
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/teams#available-related-resources
 type TeamIncludeOpt string
 
 const (
@@ -85,8 +100,14 @@ const (
 type TeamListOptions struct {
 	ListOptions
 	// Optional: A list of relations to include.
-	// https://www.terraform.io/docs/cloud/api/teams.html#available-related-resources
+	// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/teams#available-related-resources
 	Include []TeamIncludeOpt `url:"include,omitempty"`
+
+	// Optional: A list of team names to filter by.
+	Names []string `url:"filter[names],omitempty"`
+
+	// Optional: A query string to search teams by names.
+	Query string `url:"q,omitempty"`
 }
 
 // TeamCreateOptions represents the options for creating a team.
@@ -108,6 +129,9 @@ type TeamCreateOptions struct {
 
 	// The team's visibility ("secret", "organization")
 	Visibility *string `jsonapi:"attr,visibility,omitempty"`
+
+	// Optional: Used by Owners and users with "Manage Teams" permissions to control whether team members can manage team tokens
+	AllowMemberTokenManagement *bool `jsonapi:"attr,allow-member-token-management,omitempty"`
 }
 
 // TeamUpdateOptions represents the options for updating a team.
@@ -129,16 +153,28 @@ type TeamUpdateOptions struct {
 
 	// Optional: The team's visibility ("secret", "organization")
 	Visibility *string `jsonapi:"attr,visibility,omitempty"`
+
+	// Optional: Used by Owners and users with "Manage Teams" permissions to control whether team members can manage team tokens
+	AllowMemberTokenManagement *bool `jsonapi:"attr,allow-member-token-management,omitempty"`
 }
 
 // OrganizationAccessOptions represents the organization access options of a team.
 type OrganizationAccessOptions struct {
-	ManagePolicies        *bool `json:"manage-policies,omitempty"`
-	ManagePolicyOverrides *bool `json:"manage-policy-overrides,omitempty"`
-	ManageWorkspaces      *bool `json:"manage-workspaces,omitempty"`
-	ManageVCSSettings     *bool `json:"manage-vcs-settings,omitempty"`
-	ManageProviders       *bool `json:"manage-providers,omitempty"`
-	ManageModules         *bool `json:"manage-modules,omitempty"`
+	ManagePolicies           *bool `json:"manage-policies,omitempty"`
+	ManagePolicyOverrides    *bool `json:"manage-policy-overrides,omitempty"`
+	ManageWorkspaces         *bool `json:"manage-workspaces,omitempty"`
+	ManageVCSSettings        *bool `json:"manage-vcs-settings,omitempty"`
+	ManageProviders          *bool `json:"manage-providers,omitempty"`
+	ManageModules            *bool `json:"manage-modules,omitempty"`
+	ManageRunTasks           *bool `json:"manage-run-tasks,omitempty"`
+	ManageProjects           *bool `json:"manage-projects,omitempty"`
+	ReadWorkspaces           *bool `json:"read-workspaces,omitempty"`
+	ReadProjects             *bool `json:"read-projects,omitempty"`
+	ManageMembership         *bool `json:"manage-membership,omitempty"`
+	ManageTeams              *bool `json:"manage-teams,omitempty"`
+	ManageOrganizationAccess *bool `json:"manage-organization-access,omitempty"`
+	AccessSecretTeams        *bool `json:"access-secret-teams,omitempty"`
+	ManageAgentPools         *bool `json:"manage-agent-pools,omitempty"`
 }
 
 // List all the teams of the given organization.
@@ -149,14 +185,14 @@ func (s *teams) List(ctx context.Context, organization string, options *TeamList
 	if err := options.valid(); err != nil {
 		return nil, err
 	}
-	u := fmt.Sprintf("organizations/%s/teams", url.QueryEscape(organization))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("organizations/%s/teams", url.PathEscape(organization))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	tl := &TeamList{}
-	err = s.client.do(ctx, req, tl)
+	err = req.Do(ctx, tl)
 	if err != nil {
 		return nil, err
 	}
@@ -173,14 +209,14 @@ func (s *teams) Create(ctx context.Context, organization string, options TeamCre
 		return nil, err
 	}
 
-	u := fmt.Sprintf("organizations/%s/teams", url.QueryEscape(organization))
-	req, err := s.client.newRequest("POST", u, &options)
+	u := fmt.Sprintf("organizations/%s/teams", url.PathEscape(organization))
+	req, err := s.client.NewRequest("POST", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	t := &Team{}
-	err = s.client.do(ctx, req, t)
+	err = req.Do(ctx, t)
 	if err != nil {
 		return nil, err
 	}
@@ -194,14 +230,14 @@ func (s *teams) Read(ctx context.Context, teamID string) (*Team, error) {
 		return nil, ErrInvalidTeamID
 	}
 
-	u := fmt.Sprintf("teams/%s", url.QueryEscape(teamID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("teams/%s", url.PathEscape(teamID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	t := &Team{}
-	err = s.client.do(ctx, req, t)
+	err = req.Do(ctx, t)
 	if err != nil {
 		return nil, err
 	}
@@ -215,14 +251,14 @@ func (s *teams) Update(ctx context.Context, teamID string, options TeamUpdateOpt
 		return nil, ErrInvalidTeamID
 	}
 
-	u := fmt.Sprintf("teams/%s", url.QueryEscape(teamID))
-	req, err := s.client.newRequest("PATCH", u, &options)
+	u := fmt.Sprintf("teams/%s", url.PathEscape(teamID))
+	req, err := s.client.NewRequest("PATCH", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	t := &Team{}
-	err = s.client.do(ctx, req, t)
+	err = req.Do(ctx, t)
 	if err != nil {
 		return nil, err
 	}
@@ -236,13 +272,13 @@ func (s *teams) Delete(ctx context.Context, teamID string) error {
 		return ErrInvalidTeamID
 	}
 
-	u := fmt.Sprintf("teams/%s", url.QueryEscape(teamID))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("teams/%s", url.PathEscape(teamID))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 func (o TeamCreateOptions) valid() error {
@@ -257,20 +293,17 @@ func (o *TeamListOptions) valid() error {
 		return nil // nothing to validate
 	}
 
-	if err := validateTeamIncludeParams(o.Include); err != nil {
+	if err := validateTeamNames(o.Names); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func validateTeamIncludeParams(params []TeamIncludeOpt) error {
-	for _, p := range params {
-		switch p {
-		case TeamUsers, TeamOrganizationMemberships:
-			// do nothing
-		default:
-			return ErrInvalidIncludeValue
+func validateTeamNames(names []string) error {
+	for _, name := range names {
+		if name == "" {
+			return ErrEmptyTeamName
 		}
 	}
 

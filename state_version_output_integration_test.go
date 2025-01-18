@@ -1,18 +1,15 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-const waitForStateVersionOutputs = 700 * time.Millisecond
 
 func TestStateVersionOutputsRead(t *testing.T) {
 	client := testClient(t)
@@ -21,11 +18,11 @@ func TestStateVersionOutputsRead(t *testing.T) {
 	wTest1, wTest1Cleanup := createWorkspace(t, client, nil)
 	defer wTest1Cleanup()
 
-	_, svTestCleanup := createStateVersion(t, client, 0, wTest1)
+	svTest, svTestCleanup := createStateVersion(t, client, 0, wTest1)
 	defer svTestCleanup()
 
-	// give TFC some time to process the statefile and extract the outputs.
-	time.Sleep(waitForStateVersionOutputs)
+	// give HCP Terraform some time to process the statefile and extract the outputs.
+	waitForSVOutputs(t, client, svTest.ID)
 
 	curOpts := &StateVersionCurrentOptions{
 		Include: []StateVersionIncludeOpt{SVoutputs},
@@ -36,21 +33,49 @@ func TestStateVersionOutputsRead(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	require.NotEmpty(t, sv.Outputs)
+	require.NotNil(t, sv.Outputs[0])
+
 	output := sv.Outputs[0]
 
-	t.Run("when a state output exists", func(t *testing.T) {
-		so, err := client.StateVersionOutputs.Read(ctx, output.ID)
+	t.Run("Read by ID", func(t *testing.T) {
+		t.Run("when a state output exists", func(t *testing.T) {
+			so, err := client.StateVersionOutputs.Read(ctx, output.ID)
+			require.NoError(t, err)
+
+			assert.Equal(t, so.ID, output.ID)
+			assert.Equal(t, so.Name, output.Name)
+			assert.Equal(t, so.Value, output.Value)
+		})
+
+		t.Run("when a state output does not exist", func(t *testing.T) {
+			so, err := client.StateVersionOutputs.Read(ctx, "wsout-J2zM24JPAAAAAAAA")
+			assert.Nil(t, so)
+			assert.Equal(t, ErrResourceNotFound, err)
+		})
+	})
+
+	t.Run("Read current workspace outputs", func(t *testing.T) {
+		so, err := client.StateVersionOutputs.ReadCurrent(ctx, wTest1.ID)
 		require.NoError(t, err)
-
-		assert.Equal(t, so.ID, output.ID)
-		assert.Equal(t, so.Name, output.Name)
-		assert.Equal(t, so.Value, output.Value)
+		assert.NotEmpty(t, so.Items)
 	})
 
-	t.Run("when a state output does not exist", func(t *testing.T) {
-		so, err := client.StateVersionOutputs.Read(ctx, "wsout-J2zM24JPAAAAAAAA")
-		assert.Nil(t, so)
-		assert.Equal(t, ErrResourceNotFound, err)
-	})
+	t.Run("Sensitive secrets are null", func(t *testing.T) {
+		so, err := client.StateVersionOutputs.ReadCurrent(ctx, wTest1.ID)
+		require.NoError(t, err)
+		require.NotEmpty(t, so.Items)
 
+		var found *StateVersionOutput = nil
+		for _, s := range so.Items {
+			if s.Name == "test_output_string" {
+				found = s
+				break
+			}
+		}
+
+		assert.NotNil(t, found)
+		assert.True(t, found.Sensitive)
+		assert.Nil(t, found.Value)
+	})
 }

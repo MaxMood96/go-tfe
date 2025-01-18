@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -8,7 +8,7 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
@@ -16,20 +16,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func containsStateVersion(versions []*StateVersion, item *StateVersion) bool {
+	for _, sv := range versions {
+		if sv.ID == item.ID {
+			return true
+		}
+	}
+	return false
+}
+
 func TestStateVersionsList(t *testing.T) {
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
-	defer orgTestCleanup()
+	t.Cleanup(orgTestCleanup)
 
 	wTest, wTestCleanup := createWorkspace(t, client, orgTest)
-	defer wTestCleanup()
+	t.Cleanup(wTestCleanup)
 
 	svTest1, svTestCleanup1 := createStateVersion(t, client, 0, wTest)
-	defer svTestCleanup1()
+	t.Cleanup(svTestCleanup1)
 	svTest2, svTestCleanup2 := createStateVersion(t, client, 1, wTest)
-	defer svTestCleanup2()
+	t.Cleanup(svTestCleanup2)
 
 	t.Run("without StateVersionListOptions", func(t *testing.T) {
 		svl, err := client.StateVersions.List(ctx, nil)
@@ -45,26 +54,11 @@ func TestStateVersionsList(t *testing.T) {
 
 		svl, err := client.StateVersions.List(ctx, options)
 		require.NoError(t, err)
+		require.NotEmpty(t, svl.Items)
 
-		// We need to strip the upload URL as that is a dynamic link.
-		svTest1.DownloadURL = ""
-		svTest2.DownloadURL = ""
+		assert.True(t, containsStateVersion(svl.Items, svTest1), fmt.Sprintf("State Versions did not contain %s", svTest1.ID))
+		assert.True(t, containsStateVersion(svl.Items, svTest2), fmt.Sprintf("State Versions did not contain %s", svTest2.ID))
 
-		// And for the retrieved configuration versions as well.
-		for _, sv := range svl.Items {
-			sv.DownloadURL = ""
-		}
-
-		// outputs are populated only once the state has been parsed by TFC
-		// which can cause the tests to fail if it doesn't happen fast enough.
-		for idx := range svl.Items {
-			svl.Items[idx].Outputs = nil
-		}
-		svTest1.Outputs = nil
-		svTest2.Outputs = nil
-
-		assert.Contains(t, svl.Items, svTest1)
-		assert.Contains(t, svl.Items, svTest2)
 		assert.Equal(t, 1, svl.CurrentPage)
 		assert.Equal(t, 2, svl.TotalCount)
 	})
@@ -110,17 +104,133 @@ func TestStateVersionsList(t *testing.T) {
 	})
 }
 
+func TestStateVersionsUpload(t *testing.T) {
+	client := testClient(t)
+
+	wTest, wTestCleanup := createWorkspace(t, client, nil)
+	t.Cleanup(wTestCleanup)
+
+	state, err := os.ReadFile("test-fixtures/state-version/terraform.tfstate")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	jsonState, err := os.ReadFile("test-fixtures/json-state/state.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	jsonStateOutputs, err := os.ReadFile("test-fixtures/json-state-outputs/everything.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("can create finalized state versions", func(t *testing.T) {
+		ctx := context.Background()
+		_, err := client.Workspaces.Lock(ctx, wTest.ID, WorkspaceLockOptions{})
+		require.NoError(t, err)
+
+		sv, err := client.StateVersions.Upload(ctx, wTest.ID, StateVersionUploadOptions{
+			StateVersionCreateOptions: StateVersionCreateOptions{
+				Lineage:          String("741c4949-60b9-5bb1-5bf8-b14f4bb14af3"),
+				MD5:              String(fmt.Sprintf("%x", md5.Sum(state))),
+				Serial:           Int64(1),
+				JSONStateOutputs: String(base64.StdEncoding.EncodeToString(jsonStateOutputs)),
+			},
+			RawState:     state,
+			RawJSONState: jsonState,
+		})
+		require.NoError(t, err)
+
+		_, err = client.Workspaces.Unlock(ctx, wTest.ID)
+		require.NoError(t, err)
+
+		// HCP Terraform does some async processing on state versions, so we must await it
+		// lest we flake. Should take well less than a minute tho.
+		timeout := time.Minute / 2
+
+		ctxPollSVReady, cancelPollSVReady := context.WithTimeout(ctx, timeout)
+		defer cancelPollSVReady()
+
+		sv = pollStateVersionStatus(t, client, ctxPollSVReady, sv, []StateVersionStatus{StateVersionFinalized})
+
+		assert.NotEmpty(t, sv.DownloadURL)
+		assert.Equal(t, StateVersionFinalized, sv.Status)
+	})
+
+	t.Run("cannot provide base64 state parameter when uploading", func(t *testing.T) {
+		ctx := context.Background()
+		_, err = client.StateVersions.Upload(ctx, wTest.ID, StateVersionUploadOptions{
+			StateVersionCreateOptions: StateVersionCreateOptions{
+				Lineage:          String("741c4949-60b9-5bb1-5bf8-b14f4bb14af3"),
+				MD5:              String(fmt.Sprintf("%x", md5.Sum(state))),
+				Serial:           Int64(1),
+				State:            String(base64.StdEncoding.EncodeToString(state)),
+				JSONStateOutputs: String(base64.StdEncoding.EncodeToString(jsonStateOutputs)),
+			},
+			RawState:     state,
+			RawJSONState: jsonState,
+		})
+		require.ErrorIs(t, err, ErrStateMustBeOmitted)
+	})
+
+	t.Run("RawState parameter is required when uploading", func(t *testing.T) {
+		ctx := context.Background()
+		_, err = client.StateVersions.Upload(ctx, wTest.ID, StateVersionUploadOptions{
+			StateVersionCreateOptions: StateVersionCreateOptions{
+				Lineage:          String("741c4949-60b9-5bb1-5bf8-b14f4bb14af3"),
+				MD5:              String(fmt.Sprintf("%x", md5.Sum(state))),
+				Serial:           Int64(1),
+				JSONStateOutputs: String(base64.StdEncoding.EncodeToString(jsonStateOutputs)),
+			},
+			RawJSONState: jsonState,
+		})
+		require.ErrorIs(t, err, ErrRequiredRawState)
+	})
+}
+
 func TestStateVersionsCreate(t *testing.T) {
 	client := testClient(t)
 	ctx := context.Background()
 
 	wTest, wTestCleanup := createWorkspace(t, client, nil)
-	defer wTestCleanup()
+	t.Cleanup(wTestCleanup)
 
-	state, err := ioutil.ReadFile("test-fixtures/state-version/terraform.tfstate")
+	state, err := os.ReadFile("test-fixtures/state-version/terraform.tfstate")
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	jsonState, err := os.ReadFile("test-fixtures/json-state/state.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	jsonStateOutputs, err := os.ReadFile("test-fixtures/json-state-outputs/everything.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("can create pending state versions", func(t *testing.T) {
+		ctx := context.Background()
+		_, err := client.Workspaces.Lock(ctx, wTest.ID, WorkspaceLockOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = client.StateVersions.Create(ctx, wTest.ID, StateVersionCreateOptions{
+			Lineage: String("741c4949-60b9-5bb1-5bf8-b14f4bb14af3"),
+			MD5:     String(fmt.Sprintf("%x", md5.Sum(state))),
+			Serial:  Int64(1),
+		})
+		require.NoError(t, err)
+
+		// Workspaces must be force-unlocked when there is a pending state version
+		_, err = client.Workspaces.ForceUnlock(ctx, wTest.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
 
 	t.Run("with valid options", func(t *testing.T) {
 		ctx := context.Background()
@@ -145,6 +255,45 @@ func TestStateVersionsCreate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
+		for _, item := range []*StateVersion{
+			sv,
+			refreshed,
+		} {
+			assert.NotEmpty(t, item.ID)
+			assert.Equal(t, int64(1), item.Serial)
+			assert.NotEmpty(t, item.CreatedAt)
+			assert.NotEmpty(t, item.DownloadURL)
+		}
+	})
+
+	t.Run("with external state representation", func(t *testing.T) {
+		ctx := context.Background()
+		_, err := client.Workspaces.Lock(ctx, wTest.ID, WorkspaceLockOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		sv, err := client.StateVersions.Create(ctx, wTest.ID, StateVersionCreateOptions{
+			Lineage:          String("741c4949-60b9-5bb1-5bf8-b14f4bb14af3"),
+			MD5:              String(fmt.Sprintf("%x", md5.Sum(state))),
+			Serial:           Int64(1),
+			State:            String(base64.StdEncoding.EncodeToString(state)),
+			JSONState:        String(base64.StdEncoding.EncodeToString(jsonState)),
+			JSONStateOutputs: String(base64.StdEncoding.EncodeToString(jsonStateOutputs)),
+		})
+		require.NoError(t, err)
+
+		// Get a refreshed view of the configuration version.
+		refreshed, err := client.StateVersions.Read(ctx, sv.ID)
+		require.NoError(t, err)
+
+		_, err = client.Workspaces.Unlock(ctx, wTest.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// TODO: check state outputs for the ones we sent in JSONStateOutputs
 
 		for _, item := range []*StateVersion{
 			sv,
@@ -205,7 +354,7 @@ func TestStateVersionsCreate(t *testing.T) {
 		t.Skip("This can only be tested with the run specific token")
 
 		rTest, rTestCleanup := createRun(t, client, wTest)
-		defer rTestCleanup()
+		t.Cleanup(rTestCleanup)
 
 		ctx := context.Background()
 		sv, err := client.StateVersions.Create(ctx, wTest.ID, StateVersionCreateOptions{
@@ -243,22 +392,13 @@ func TestStateVersionsCreate(t *testing.T) {
 		assert.Equal(t, err, ErrRequiredM5)
 	})
 
-	t.Run("withous serial", func(t *testing.T) {
+	t.Run("without serial", func(t *testing.T) {
 		sv, err := client.StateVersions.Create(ctx, wTest.ID, StateVersionCreateOptions{
 			MD5:   String(fmt.Sprintf("%x", md5.Sum(state))),
 			State: String(base64.StdEncoding.EncodeToString(state)),
 		})
 		assert.Nil(t, sv)
 		assert.Equal(t, err, ErrRequiredSerial)
-	})
-
-	t.Run("without state", func(t *testing.T) {
-		sv, err := client.StateVersions.Create(ctx, wTest.ID, StateVersionCreateOptions{
-			MD5:    String(fmt.Sprintf("%x", md5.Sum(state))),
-			Serial: Int64(0),
-		})
-		assert.Nil(t, sv)
-		assert.Equal(t, err, ErrRequiredState)
 	})
 
 	t.Run("with invalid workspace id", func(t *testing.T) {
@@ -273,23 +413,43 @@ func TestStateVersionsRead(t *testing.T) {
 	ctx := context.Background()
 
 	svTest, svTestCleanup := createStateVersion(t, client, 0, nil)
-	defer svTestCleanup()
+	t.Cleanup(svTestCleanup)
 
 	t.Run("when the state version exists", func(t *testing.T) {
+		var sv *StateVersion
+		var ok bool
 		sv, err := client.StateVersions.Read(ctx, svTest.ID)
 		require.NoError(t, err)
 
-		// Don't compare the DownloadURL because it will be generated twice
-		// in this test - once at creation of the configuration version, and
-		// again during the GET.
-		svTest.DownloadURL, sv.DownloadURL = "", ""
+		if !sv.ResourcesProcessed {
+			svRetry, err := retry(func() (interface{}, error) {
+				svTest, err := client.StateVersions.Read(ctx, svTest.ID)
+				require.NoError(t, err)
 
-		// outputs are populated only once the state has been parsed by TFC
-		// which can cause the tests to fail if it doesn't happen fast enough.
-		svTest.Outputs = nil
-		sv.Outputs = nil
+				if !svTest.ResourcesProcessed || svTest.BillableRUMCount == nil || *svTest.BillableRUMCount == 0 {
+					return nil, fmt.Errorf("resources not processed %v / %d", svTest.ResourcesProcessed, svTest.BillableRUMCount)
+				}
 
-		assert.Equal(t, svTest, sv)
+				return svTest, nil
+			})
+
+			if err != nil {
+				t.Fatalf("error retrying state version read, err=%s", err)
+			}
+
+			sv, ok = svRetry.(*StateVersion)
+			if !ok {
+				t.Fatalf("Expected sv to be type *StateVersion, got %T", sv)
+			}
+		}
+
+		assert.NotEmpty(t, sv.DownloadURL)
+		assert.NotEmpty(t, sv.StateVersion)
+		assert.NotEmpty(t, sv.TerraformVersion)
+		assert.NotEmpty(t, sv.Outputs)
+
+		require.NotNil(t, sv.BillableRUMCount)
+		assert.Greater(t, *sv.BillableRUMCount, uint32(0))
 	})
 
 	t.Run("when the state version does not exist", func(t *testing.T) {
@@ -310,10 +470,10 @@ func TestStateVersionsReadWithOptions(t *testing.T) {
 	ctx := context.Background()
 
 	svTest, svTestCleanup := createStateVersion(t, client, 0, nil)
-	defer svTestCleanup()
+	t.Cleanup(svTestCleanup)
 
-	// give TFC some time to process the statefile and extract the outputs.
-	time.Sleep(waitForStateVersionOutputs)
+	// give HCP Terraform some time to process the statefile and extract the outputs.
+	waitForSVOutputs(t, client, svTest.ID)
 
 	t.Run("when the state version exists", func(t *testing.T) {
 		curOpts := &StateVersionReadOptions{
@@ -332,29 +492,31 @@ func TestStateVersionsCurrent(t *testing.T) {
 	ctx := context.Background()
 
 	wTest1, wTest1Cleanup := createWorkspace(t, client, nil)
-	defer wTest1Cleanup()
+	t.Cleanup(wTest1Cleanup)
 
 	wTest2, wTest2Cleanup := createWorkspace(t, client, nil)
-	defer wTest2Cleanup()
+	t.Cleanup(wTest2Cleanup)
 
 	svTest, svTestCleanup := createStateVersion(t, client, 0, wTest1)
-	defer svTestCleanup()
+	t.Cleanup(svTestCleanup)
 
 	t.Run("when a state version exists", func(t *testing.T) {
 		sv, err := client.StateVersions.ReadCurrent(ctx, wTest1.ID)
 		require.NoError(t, err)
 
-		// Don't compare the DownloadURL because it will be generated twice
-		// in this test - once at creation of the configuration version, and
-		// again during the GET.
-		svTest.DownloadURL, sv.DownloadURL = "", ""
+		for _, stateVersion := range []*StateVersion{svTest, sv} {
+			// Don't compare the DownloadURL because it will be generated twice
+			// in this test - once at creation of the configuration version, and
+			// again during the GET.
+			stateVersion.DownloadURL = ""
 
-		// outputs are populated only once the state has been parsed by TFC
-		// which can cause the tests to fail if it doesn't happen fast enough.
-		svTest.Outputs = nil
-		sv.Outputs = nil
+			// outputs, providers are populated only once the state has been parsed by HCP Terraform
+			// which can cause the tests to fail if it doesn't happen fast enough.
+			stateVersion.Outputs = nil
+			stateVersion.Providers = nil
+		}
 
-		assert.Equal(t, svTest, sv)
+		assert.Equal(t, svTest.ID, sv.ID)
 	})
 
 	t.Run("when a state version does not exist", func(t *testing.T) {
@@ -375,13 +537,13 @@ func TestStateVersionsCurrentWithOptions(t *testing.T) {
 	ctx := context.Background()
 
 	wTest1, wTest1Cleanup := createWorkspace(t, client, nil)
-	defer wTest1Cleanup()
+	t.Cleanup(wTest1Cleanup)
 
-	_, svTestCleanup := createStateVersion(t, client, 0, wTest1)
-	defer svTestCleanup()
+	svTest, svTestCleanup := createStateVersion(t, client, 0, wTest1)
+	t.Cleanup(svTestCleanup)
 
-	// give TFC some time to process the statefile and extract the outputs.
-	time.Sleep(waitForStateVersionOutputs)
+	// give HCP Terraform some time to process the statefile and extract the outputs.
+	waitForSVOutputs(t, client, svTest.ID)
 
 	t.Run("when the state version exists", func(t *testing.T) {
 		curOpts := &StateVersionCurrentOptions{
@@ -400,24 +562,15 @@ func TestStateVersionsDownload(t *testing.T) {
 	ctx := context.Background()
 
 	svTest, svTestCleanup := createStateVersion(t, client, 0, nil)
-	defer svTestCleanup()
+	t.Cleanup(svTestCleanup)
 
-	stateTest, err := ioutil.ReadFile("test-fixtures/state-version/terraform.tfstate")
+	stateTest, err := os.ReadFile("test-fixtures/state-version/terraform.tfstate")
 	require.NoError(t, err)
 
 	t.Run("when the state version exists", func(t *testing.T) {
 		state, err := client.StateVersions.Download(ctx, svTest.DownloadURL)
 		require.NoError(t, err)
 		assert.Equal(t, stateTest, state)
-	})
-
-	t.Run("when the state version does not exist", func(t *testing.T) {
-		state, err := client.StateVersions.Download(
-			ctx,
-			svTest.DownloadURL[:len(svTest.DownloadURL)-10]+"nonexisting",
-		)
-		assert.Nil(t, state)
-		assert.Error(t, err)
 	})
 
 	t.Run("with an invalid url", func(t *testing.T) {
@@ -432,13 +585,13 @@ func TestStateVersionOutputs(t *testing.T) {
 	ctx := context.Background()
 
 	wTest1, wTest1Cleanup := createWorkspace(t, client, nil)
-	defer wTest1Cleanup()
+	t.Cleanup(wTest1Cleanup)
 
 	sv, svTestCleanup := createStateVersion(t, client, 0, wTest1)
-	defer svTestCleanup()
+	t.Cleanup(svTestCleanup)
 
-	// give TFC some time to process the statefile and extract the outputs.
-	time.Sleep(waitForStateVersionOutputs)
+	// give HCP Terraform some time to process the statefile and extract the outputs.
+	waitForSVOutputs(t, client, sv.ID)
 
 	t.Run("when the state version exists", func(t *testing.T) {
 		outputs, err := client.StateVersions.ListOutputs(ctx, sv.ID, nil)
@@ -483,5 +636,50 @@ func TestStateVersionOutputs(t *testing.T) {
 		assert.Nil(t, outputs)
 		assert.Error(t, err)
 	})
+}
 
+func TestStateVersions_ManageBackingData(t *testing.T) {
+	skipUnlessEnterprise(t)
+
+	client := testClient(t)
+	ctx := context.Background()
+
+	workspace, workspaceCleanup := createWorkspace(t, client, nil)
+	t.Cleanup(workspaceCleanup)
+
+	nonCurrentStateVersion, svTestCleanup := createStateVersion(t, client, 0, workspace)
+	t.Cleanup(svTestCleanup)
+
+	_, svTestCleanup = createStateVersion(t, client, 0, workspace)
+	t.Cleanup(svTestCleanup)
+
+	t.Run("soft delete backing data", func(t *testing.T) {
+		err := client.StateVersions.SoftDeleteBackingData(ctx, nonCurrentStateVersion.ID)
+		require.NoError(t, err)
+
+		_, err = client.StateVersions.Download(ctx, nonCurrentStateVersion.DownloadURL)
+		assert.Equal(t, ErrResourceNotFound, err)
+	})
+
+	t.Run("restore backing data", func(t *testing.T) {
+		err := client.StateVersions.RestoreBackingData(ctx, nonCurrentStateVersion.ID)
+		require.NoError(t, err)
+
+		_, err = client.StateVersions.Download(ctx, nonCurrentStateVersion.DownloadURL)
+		require.NoError(t, err)
+	})
+
+	t.Run("permanently delete backing data", func(t *testing.T) {
+		err := client.StateVersions.SoftDeleteBackingData(ctx, nonCurrentStateVersion.ID)
+		require.NoError(t, err)
+
+		err = client.StateVersions.PermanentlyDeleteBackingData(ctx, nonCurrentStateVersion.ID)
+		require.NoError(t, err)
+
+		err = client.StateVersions.RestoreBackingData(ctx, nonCurrentStateVersion.ID)
+		require.ErrorContainsf(t, err, "transition not allowed", "Restore backing data should fail")
+
+		_, err = client.StateVersions.Download(ctx, nonCurrentStateVersion.DownloadURL)
+		assert.Equal(t, ErrResourceNotFound, err)
+	})
 }

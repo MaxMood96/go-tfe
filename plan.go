@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -15,7 +18,7 @@ var _ Plans = (*plans)(nil)
 // Plans describes all the plan related methods that the Terraform Enterprise
 // API supports.
 //
-// TFE API docs: https://www.terraform.io/cloud-docs/api-docs/plans
+// TFE API docs: https://developer.hashicorp.com/terraform/cloud-docs/api-docs/plans
 type Plans interface {
 	// Read a plan by its ID.
 	Read(ctx context.Context, planID string) (*Plan, error)
@@ -50,14 +53,16 @@ const (
 
 // Plan represents a Terraform Enterprise plan.
 type Plan struct {
-	ID                   string                `jsonapi:"primary,plans"`
-	HasChanges           bool                  `jsonapi:"attr,has-changes"`
-	LogReadURL           string                `jsonapi:"attr,log-read-url"`
-	ResourceAdditions    int                   `jsonapi:"attr,resource-additions"`
-	ResourceChanges      int                   `jsonapi:"attr,resource-changes"`
-	ResourceDestructions int                   `jsonapi:"attr,resource-destructions"`
-	Status               PlanStatus            `jsonapi:"attr,status"`
-	StatusTimestamps     *PlanStatusTimestamps `jsonapi:"attr,status-timestamps"`
+	ID                     string                `jsonapi:"primary,plans"`
+	HasChanges             bool                  `jsonapi:"attr,has-changes"`
+	GeneratedConfiguration bool                  `jsonapi:"attr,generated-configuration"`
+	LogReadURL             string                `jsonapi:"attr,log-read-url"`
+	ResourceAdditions      int                   `jsonapi:"attr,resource-additions"`
+	ResourceChanges        int                   `jsonapi:"attr,resource-changes"`
+	ResourceDestructions   int                   `jsonapi:"attr,resource-destructions"`
+	ResourceImports        int                   `jsonapi:"attr,resource-imports"`
+	Status                 PlanStatus            `jsonapi:"attr,status"`
+	StatusTimestamps       *PlanStatusTimestamps `jsonapi:"attr,status-timestamps"`
 
 	// Relations
 	Exports []*PlanExport `jsonapi:"relation,exports"`
@@ -79,14 +84,14 @@ func (s *plans) Read(ctx context.Context, planID string) (*Plan, error) {
 		return nil, ErrInvalidPlanID
 	}
 
-	u := fmt.Sprintf("plans/%s", url.QueryEscape(planID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("plans/%s", url.PathEscape(planID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	p := &Plan{}
-	err = s.client.do(ctx, req, p)
+	err = req.Do(ctx, p)
 	if err != nil {
 		return nil, err
 	}
@@ -144,14 +149,14 @@ func (s *plans) ReadJSONOutput(ctx context.Context, planID string) ([]byte, erro
 		return nil, ErrInvalidPlanID
 	}
 
-	u := fmt.Sprintf("plans/%s/json-output", url.QueryEscape(planID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("plans/%s/json-output", url.PathEscape(planID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	var buf bytes.Buffer
-	err = s.client.do(ctx, req, &buf)
+	err = req.Do(ctx, &buf)
 	if err != nil {
 		return nil, err
 	}

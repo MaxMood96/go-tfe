@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -13,7 +16,7 @@ var _ OrganizationMemberships = (*organizationMemberships)(nil)
 // the Terraform Enterprise API supports.
 //
 // TFE API docs:
-// https://www.terraform.io/docs/cloud/api/organization-memberships.html
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/organization-memberships
 type OrganizationMemberships interface {
 	// List all the organization memberships of the given organization.
 	List(ctx context.Context, organization string, options *OrganizationMembershipListOptions) (*OrganizationMembershipList, error)
@@ -63,7 +66,7 @@ type OrganizationMembership struct {
 }
 
 // OrgMembershipIncludeOpt represents the available options for include query params.
-// https://www.terraform.io/cloud-docs/api-docs/organization-memberships#available-related-resources
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/organization-memberships#available-related-resources
 type OrgMembershipIncludeOpt string
 
 const (
@@ -75,8 +78,18 @@ const (
 type OrganizationMembershipListOptions struct {
 	ListOptions
 	// Optional: A list of relations to include. See available resources
-	// https://www.terraform.io/cloud-docs/api-docs/organization-memberships#available-related-resources
+	// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/organization-memberships#available-related-resources
 	Include []OrgMembershipIncludeOpt `url:"include,omitempty"`
+
+	// Optional: A list of organization member emails to filter by.
+	Emails []string `url:"filter[email],omitempty"`
+
+	// Optional: If specified, restricts results to those matching status value.
+	Status OrganizationMembershipStatus `url:"filter[status],omitempty"`
+
+	// Optional: A query string to search organization memberships by user name
+	// and email.
+	Query string `url:"q,omitempty"`
 }
 
 // OrganizationMembershipCreateOptions represents the options for creating an organization membership.
@@ -89,12 +102,15 @@ type OrganizationMembershipCreateOptions struct {
 
 	// Required: User's email address.
 	Email *string `jsonapi:"attr,email"`
+
+	// Optional: A list of teams in the organization to add the user to
+	Teams []*Team `jsonapi:"relation,teams,omitempty"`
 }
 
 // OrganizationMembershipReadOptions represents the options for reading organization memberships.
 type OrganizationMembershipReadOptions struct {
 	// Optional: A list of relations to include. See available resources
-	// https://www.terraform.io/cloud-docs/api-docs/organization-memberships#available-related-resources
+	// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/organization-memberships#available-related-resources
 	Include []OrgMembershipIncludeOpt `url:"include,omitempty"`
 }
 
@@ -107,14 +123,14 @@ func (s *organizationMemberships) List(ctx context.Context, organization string,
 		return nil, err
 	}
 
-	u := fmt.Sprintf("organizations/%s/organization-memberships", url.QueryEscape(organization))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("organizations/%s/organization-memberships", url.PathEscape(organization))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	ml := &OrganizationMembershipList{}
-	err = s.client.do(ctx, req, ml)
+	err = req.Do(ctx, ml)
 	if err != nil {
 		return nil, err
 	}
@@ -131,14 +147,14 @@ func (s *organizationMemberships) Create(ctx context.Context, organization strin
 		return nil, err
 	}
 
-	u := fmt.Sprintf("organizations/%s/organization-memberships", url.QueryEscape(organization))
-	req, err := s.client.newRequest("POST", u, &options)
+	u := fmt.Sprintf("organizations/%s/organization-memberships", url.PathEscape(organization))
+	req, err := s.client.NewRequest("POST", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	m := &OrganizationMembership{}
-	err = s.client.do(ctx, req, m)
+	err = req.Do(ctx, m)
 	if err != nil {
 		return nil, err
 	}
@@ -160,14 +176,14 @@ func (s *organizationMemberships) ReadWithOptions(ctx context.Context, organizat
 		return nil, err
 	}
 
-	u := fmt.Sprintf("organization-memberships/%s", url.QueryEscape(organizationMembershipID))
-	req, err := s.client.newRequest("GET", u, &options)
+	u := fmt.Sprintf("organization-memberships/%s", url.PathEscape(organizationMembershipID))
+	req, err := s.client.NewRequest("GET", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	mem := &OrganizationMembership{}
-	err = s.client.do(ctx, req, mem)
+	err = req.Do(ctx, mem)
 	if err != nil {
 		return nil, err
 	}
@@ -181,13 +197,13 @@ func (s *organizationMemberships) Delete(ctx context.Context, organizationMember
 		return ErrInvalidMembership
 	}
 
-	u := fmt.Sprintf("organization-memberships/%s", url.QueryEscape(organizationMembershipID))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("organization-memberships/%s", url.PathEscape(organizationMembershipID))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 func (o OrganizationMembershipCreateOptions) valid() error {
@@ -202,7 +218,7 @@ func (o *OrganizationMembershipListOptions) valid() error {
 		return nil
 	}
 
-	if err := validateOrgMembershipIncludeParams(o.Include); err != nil {
+	if err := validateOrgMembershipEmailParams(o.Emails); err != nil {
 		return err
 	}
 
@@ -210,20 +226,13 @@ func (o *OrganizationMembershipListOptions) valid() error {
 }
 
 func (o OrganizationMembershipReadOptions) valid() error {
-	if err := validateOrgMembershipIncludeParams(o.Include); err != nil {
-		return err
-	}
-
 	return nil
 }
 
-func validateOrgMembershipIncludeParams(params []OrgMembershipIncludeOpt) error {
-	for _, p := range params {
-		switch p {
-		case OrgMembershipUser, OrgMembershipTeam:
-			// do nothing
-		default:
-			return ErrInvalidIncludeValue
+func validateOrgMembershipEmailParams(emails []string) error {
+	for _, email := range emails {
+		if !validEmail(email) {
+			return ErrInvalidEmail
 		}
 	}
 

@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -13,7 +13,6 @@ import (
 
 func TestAgentTokensList(t *testing.T) {
 	skipIfEnterprise(t)
-	skipIfFreeOnly(t)
 
 	client := testClient(t)
 	ctx := context.Background()
@@ -53,7 +52,6 @@ func TestAgentTokensList(t *testing.T) {
 
 func TestAgentTokensCreate(t *testing.T) {
 	skipIfEnterprise(t)
-	skipIfFreeOnly(t)
 
 	client := testClient(t)
 	ctx := context.Background()
@@ -85,7 +83,6 @@ func TestAgentTokensCreate(t *testing.T) {
 }
 func TestAgentTokensRead(t *testing.T) {
 	skipIfEnterprise(t)
-	skipIfFreeOnly(t)
 
 	client := testClient(t)
 	ctx := context.Background()
@@ -98,7 +95,7 @@ func TestAgentTokensRead(t *testing.T) {
 
 	t.Run("read token with valid token ID", func(t *testing.T) {
 		at, err := client.AgentTokens.Read(ctx, token.ID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		// The initial API call to create a token will return a value in the token
 		// object. Empty that out for comparison
 		token.Token = ""
@@ -113,7 +110,6 @@ func TestAgentTokensRead(t *testing.T) {
 
 func TestAgentTokensDelete(t *testing.T) {
 	skipIfEnterprise(t)
-	skipIfFreeOnly(t)
 
 	client := testClient(t)
 	ctx := context.Background()
@@ -125,7 +121,7 @@ func TestAgentTokensDelete(t *testing.T) {
 
 	t.Run("with valid token ID", func(t *testing.T) {
 		err := client.AgentTokens.Delete(ctx, token.ID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("without valid token ID", func(t *testing.T) {

@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -12,7 +15,7 @@ var _ VariableSetVariables = (*variableSetVariables)(nil)
 // VariableSetVariables describes all variable variable related methods within the scope of
 // Variable Sets that the Terraform Enterprise API supports
 //
-// TFE API docs: https://www.terraform.io/cloud-docs/api-docs/variable-sets#variable-relationships
+// TFE API docs: https://developer.hashicorp.com/terraform/cloud-docs/api-docs/variable-sets#variable-relationships
 type VariableSetVariables interface {
 	// List all variables in the variable set.
 	List(ctx context.Context, variableSetID string, options *VariableSetVariableListOptions) (*VariableSetVariableList, error)
@@ -47,9 +50,10 @@ type VariableSetVariable struct {
 	Category    CategoryType `jsonapi:"attr,category"`
 	HCL         bool         `jsonapi:"attr,hcl"`
 	Sensitive   bool         `jsonapi:"attr,sensitive"`
+	VersionID   string       `jsonapi:"attr,version-id"`
 
 	// Relations
-	VariableSet *VariableSet `jsonapi:"relation,configurable"`
+	VariableSet *VariableSet `jsonapi:"relation,varset"`
 }
 
 type VariableSetVariableListOptions struct {
@@ -71,14 +75,14 @@ func (s *variableSetVariables) List(ctx context.Context, variableSetID string, o
 		}
 	}
 
-	u := fmt.Sprintf("varsets/%s/relationships/vars", url.QueryEscape(variableSetID))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("varsets/%s/relationships/vars", url.PathEscape(variableSetID))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	vl := &VariableSetVariableList{}
-	err = s.client.do(ctx, req, vl)
+	err = req.Do(ctx, vl)
 	if err != nil {
 		return nil, err
 	}
@@ -134,14 +138,14 @@ func (s *variableSetVariables) Create(ctx context.Context, variableSetID string,
 		}
 	}
 
-	u := fmt.Sprintf("varsets/%s/relationships/vars", url.QueryEscape(variableSetID))
-	req, err := s.client.newRequest("POST", u, options)
+	u := fmt.Sprintf("varsets/%s/relationships/vars", url.PathEscape(variableSetID))
+	req, err := s.client.NewRequest("POST", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	v := &VariableSetVariable{}
-	err = s.client.do(ctx, req, v)
+	err = req.Do(ctx, v)
 	if err != nil {
 		return nil, err
 	}
@@ -158,15 +162,15 @@ func (s *variableSetVariables) Read(ctx context.Context, variableSetID, variable
 		return nil, ErrInvalidVariableID
 	}
 
-	u := fmt.Sprintf("varsets/%s/relationships/vars/%s", url.QueryEscape(variableSetID), url.QueryEscape(variableID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("varsets/%s/relationships/vars/%s", url.PathEscape(variableSetID), url.PathEscape(variableID))
+	req, err := s.client.NewRequest("GET", u, nil)
 
 	if err != nil {
 		return nil, err
 	}
 
 	v := &VariableSetVariable{}
-	err = s.client.do(ctx, req, v)
+	err = req.Do(ctx, v)
 	if err != nil {
 		return nil, err
 	}
@@ -207,14 +211,14 @@ func (s *variableSetVariables) Update(ctx context.Context, variableSetID, variab
 		return nil, ErrInvalidVariableID
 	}
 
-	u := fmt.Sprintf("varsets/%s/relationships/vars/%s", url.QueryEscape(variableSetID), url.QueryEscape(variableID))
-	req, err := s.client.newRequest("PATCH", u, options)
+	u := fmt.Sprintf("varsets/%s/relationships/vars/%s", url.PathEscape(variableSetID), url.PathEscape(variableID))
+	req, err := s.client.NewRequest("PATCH", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	v := &VariableSetVariable{}
-	err = s.client.do(ctx, req, v)
+	err = req.Do(ctx, v)
 	if err != nil {
 		return nil, err
 	}
@@ -231,11 +235,11 @@ func (s *variableSetVariables) Delete(ctx context.Context, variableSetID, variab
 		return ErrInvalidVariableID
 	}
 
-	u := fmt.Sprintf("varsets/%s/relationships/vars/%s", url.QueryEscape(variableSetID), url.QueryEscape(variableID))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("varsets/%s/relationships/vars/%s", url.PathEscape(variableSetID), url.PathEscape(variableID))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }

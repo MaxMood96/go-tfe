@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -17,7 +17,7 @@ import (
 )
 
 func TestAdminRuns_List(t *testing.T) {
-	skipIfCloud(t)
+	skipUnlessEnterprise(t)
 
 	client := testClient(t)
 	ctx := context.Background()
@@ -37,7 +37,7 @@ func TestAdminRuns_List(t *testing.T) {
 		rl, err := client.Admin.Runs.List(ctx, nil)
 		require.NoError(t, err)
 
-		assert.NotEmpty(t, rl.Items)
+		require.NotEmpty(t, rl.Items)
 		assert.Equal(t, adminRunItemsContainsID(rl.Items, rTest1.ID), true)
 		assert.Equal(t, adminRunItemsContainsID(rl.Items, rTest2.ID), true)
 	})
@@ -61,7 +61,7 @@ func TestAdminRuns_List(t *testing.T) {
 			},
 		})
 		require.NoError(t, err)
-		assert.NotEmpty(t, rl.Items)
+		require.NotEmpty(t, rl.Items)
 		assert.Equal(t, 1, rl.CurrentPage)
 		assert.Equal(t, adminRunItemsContainsID(rl.Items, rTest1.ID), true)
 		assert.Equal(t, adminRunItemsContainsID(rl.Items, rTest2.ID), true)
@@ -71,11 +71,10 @@ func TestAdminRuns_List(t *testing.T) {
 		rl, err := client.Admin.Runs.List(ctx, &AdminRunsListOptions{
 			Include: []AdminRunIncludeOpt{AdminRunWorkspace},
 		})
+		require.NoError(t, err)
 
-		assert.NoError(t, err)
-
-		assert.NotEmpty(t, rl.Items)
-		assert.NotNil(t, rl.Items[0].Workspace)
+		require.NotEmpty(t, rl.Items)
+		require.NotNil(t, rl.Items[0].Workspace)
 		assert.NotEmpty(t, rl.Items[0].Workspace.Name)
 	})
 
@@ -84,11 +83,11 @@ func TestAdminRuns_List(t *testing.T) {
 			Include: []AdminRunIncludeOpt{AdminRunWorkspaceOrg},
 		})
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		require.NotEmpty(t, rl.Items)
 
-		assert.NotEmpty(t, rl.Items)
-		assert.NotNil(t, rl.Items[0].Workspace)
-		assert.NotNil(t, rl.Items[0].Workspace.Organization)
+		require.NotNil(t, rl.Items[0].Workspace)
+		require.NotNil(t, rl.Items[0].Workspace.Organization)
 		assert.NotEmpty(t, rl.Items[0].Workspace.Organization.Name)
 	})
 
@@ -97,25 +96,23 @@ func TestAdminRuns_List(t *testing.T) {
 			Include: []AdminRunIncludeOpt{"workpsace"},
 		})
 
-		assert.Equal(t, err, ErrInvalidIncludeValue)
+		assert.Equal(t, ErrInvalidIncludeValue, err)
 	})
 
 	t.Run("with RunStatus.pending filter", func(t *testing.T) {
 		r1, err := client.Runs.Read(ctx, rTest1.ID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		r2, err := client.Runs.Read(ctx, rTest2.ID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// There should be pending Runs
 		rl, err := client.Admin.Runs.List(ctx, &AdminRunsListOptions{
 			RunStatus: string(RunPending),
 		})
-		assert.NoError(t, err)
-		assert.NotEmpty(t, rl.Items)
+		require.NoError(t, err)
+		require.NotEmpty(t, rl.Items)
 
-		assert.Equal(t, r1.Status, RunPlanning)
 		assert.Equal(t, adminRunItemsContainsID(rl.Items, r1.ID), false)
-		assert.Equal(t, r2.Status, RunPending)
 		assert.Equal(t, adminRunItemsContainsID(rl.Items, r2.ID), true)
 	})
 
@@ -124,7 +121,7 @@ func TestAdminRuns_List(t *testing.T) {
 		rl, err := client.Admin.Runs.List(ctx, &AdminRunsListOptions{
 			RunStatus: string(RunApplied),
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Empty(t, rl.Items)
 	})
 
@@ -132,25 +129,25 @@ func TestAdminRuns_List(t *testing.T) {
 		rl, err := client.Admin.Runs.List(ctx, &AdminRunsListOptions{
 			Query: rTest1.ID,
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
-		assert.NotEmpty(t, rl.Items)
+		require.NotEmpty(t, rl.Items)
 		assert.Equal(t, adminRunItemsContainsID(rl.Items, rTest1.ID), true)
 		assert.Equal(t, adminRunItemsContainsID(rl.Items, rTest2.ID), false)
 
 		rl, err = client.Admin.Runs.List(ctx, &AdminRunsListOptions{
 			Query: rTest2.ID,
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
-		assert.NotEmpty(t, rl.Items)
+		require.NotEmpty(t, rl.Items)
 		assert.Equal(t, adminRunItemsContainsID(rl.Items, rTest1.ID), false)
 		assert.Equal(t, adminRunItemsContainsID(rl.Items, rTest2.ID), true)
 	})
 }
 
 func TestAdminRuns_ForceCancel(t *testing.T) {
-	skipIfCloud(t)
+	skipUnlessEnterprise(t)
 
 	client := testClient(t)
 	ctx := context.Background()
@@ -179,7 +176,7 @@ func TestAdminRuns_ForceCancel(t *testing.T) {
 
 	t.Run("when the run does not exist", func(t *testing.T) {
 		err := client.Admin.Runs.ForceCancel(ctx, "nonexisting", AdminRunForceCancelOptions{})
-		assert.Equal(t, err, ErrResourceNotFound)
+		assert.Equal(t, ErrResourceNotFound, err)
 	})
 
 	t.Run("with invalid run ID", func(t *testing.T) {
@@ -190,13 +187,23 @@ func TestAdminRuns_ForceCancel(t *testing.T) {
 	t.Run("with can force cancel", func(t *testing.T) {
 		rTestPlanning, err := client.Runs.Read(ctx, rTest1.ID)
 		require.NoError(t, err)
-		assert.Equal(t, RunPlanning, rTestPlanning.Status)
+
+		ctxPollRunStatus, cancelPollPlanned := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancelPollPlanned()
+		pollRunStatus(t, client, ctxPollRunStatus, rTestPlanning, []RunStatus{RunPlanning, RunPlanned, RunCostEstimated})
+
+		require.NotNil(t, rTestPlanning.Actions)
+		require.NotNil(t, rTestPlanning.Permissions)
 		assert.Equal(t, true, rTestPlanning.Actions.IsCancelable)
 		assert.Equal(t, true, rTestPlanning.Permissions.CanForceCancel)
 
 		rTestPending, err := client.Runs.Read(ctx, rTest2.ID)
 		require.NoError(t, err)
-		assert.Equal(t, RunPending, rTestPending.Status)
+
+		pollRunStatus(t, client, ctxPollRunStatus, rTest2, []RunStatus{RunPending})
+
+		require.NotNil(t, rTestPlanning.Actions)
+		require.NotNil(t, rTestPlanning.Permissions)
 		assert.Equal(t, true, rTestPending.Actions.IsCancelable)
 		assert.Equal(t, true, rTestPending.Permissions.CanForceCancel)
 
@@ -222,8 +229,70 @@ func TestAdminRuns_ForceCancel(t *testing.T) {
 	})
 }
 
+func TestAdminRuns_ListFilterByDates(t *testing.T) {
+	skipUnlessEnterprise(t)
+
+	client := testClient(t)
+	ctx := context.Background()
+
+	org, orgCleanup := createOrganization(t, client)
+	defer orgCleanup()
+
+	wTest, wTestCleanup := createWorkspace(t, client, org)
+	defer wTestCleanup()
+
+	timestamp1 := time.Now().Format(time.RFC3339)
+	// Sleeping helps ensure that the timestamps on client and server don't
+	// need to be exactly in sync
+	time.Sleep(2 * time.Second)
+
+	rTest1, rCleanup1 := createRun(t, client, wTest)
+	defer rCleanup1()
+
+	rTest2, rCleanup2 := createRun(t, client, wTest)
+	defer rCleanup2()
+
+	time.Sleep(2 * time.Second)
+	timestamp2 := time.Now().Format(time.RFC3339)
+
+	_, rCleanup3 := createRun(t, client, wTest)
+	defer rCleanup3()
+
+	time.Sleep(2 * time.Second)
+	timestamp3 := time.Now().Format(time.RFC3339)
+
+	t.Run("has valid date ranges", func(t *testing.T) {
+		rl, err := client.Admin.Runs.List(ctx, &AdminRunsListOptions{
+			CreatedAfter:  timestamp1,
+			CreatedBefore: timestamp2,
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, 2, len(rl.Items))
+		assert.Equal(t, adminRunItemsContainsID(rl.Items, rTest1.ID), true)
+		assert.Equal(t, adminRunItemsContainsID(rl.Items, rTest2.ID), true)
+	})
+
+	t.Run("has no items when CreatedAfter and CreatedBefore datetimes has no overlap", func(t *testing.T) {
+		rl, err := client.Admin.Runs.List(ctx, &AdminRunsListOptions{
+			CreatedAfter:  timestamp3,
+			CreatedBefore: timestamp2,
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, 0, len(rl.Items))
+	})
+
+	t.Run("errors with invalid input for CreatedAfter", func(t *testing.T) {
+		_, err := client.Admin.Runs.List(ctx, &AdminRunsListOptions{
+			CreatedAfter: "invalid",
+		})
+		assert.Error(t, err)
+	})
+}
+
 func TestAdminRuns_AdminRunsListOptions_valid(t *testing.T) {
-	skipIfCloud(t)
+	skipUnlessEnterprise(t)
 
 	t.Run("has valid status", func(t *testing.T) {
 		opts := AdminRunsListOptions{
@@ -231,7 +300,7 @@ func TestAdminRuns_AdminRunsListOptions_valid(t *testing.T) {
 		}
 
 		err := opts.valid()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("has invalid status", func(t *testing.T) {
@@ -259,7 +328,7 @@ func TestAdminRuns_AdminRunsListOptions_valid(t *testing.T) {
 		}
 
 		err := opts.valid()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 }
 

@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -8,7 +11,7 @@ import (
 var _ CostEstimationSettings = (*adminCostEstimationSettings)(nil)
 
 // CostEstimationSettings describes all the cost estimation admin settings for the Admin Setting API.
-// https://www.terraform.io/cloud-docs/api-docs/admin/settings
+// https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/settings
 type CostEstimationSettings interface {
 	// Read returns the cost estimation settings.
 	Read(ctx context.Context) (*AdminCostEstimationSetting, error)
@@ -40,7 +43,7 @@ type AdminCostEstimationSetting struct {
 
 // AdminCostEstimationSettingOptions represents the admin options for updating
 // the cost estimation settings.
-// https://www.terraform.io/docs/cloud/api/admin/settings.html#request-body-1
+// https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/settings#request-body-1
 type AdminCostEstimationSettingOptions struct {
 	Enabled             *bool   `jsonapi:"attr,enabled,omitempty"`
 	AWSAccessKeyID      *string `jsonapi:"attr,aws-access-key-id,omitempty"`
@@ -54,13 +57,13 @@ type AdminCostEstimationSettingOptions struct {
 
 // Read returns the cost estimation settings.
 func (a *adminCostEstimationSettings) Read(ctx context.Context) (*AdminCostEstimationSetting, error) {
-	req, err := a.client.newRequest("GET", "admin/cost-estimation-settings", nil)
+	req, err := a.client.NewRequest("GET", "admin/cost-estimation-settings", nil)
 	if err != nil {
 		return nil, err
 	}
 
 	ace := &AdminCostEstimationSetting{}
-	err = a.client.do(ctx, req, ace)
+	err = req.Do(ctx, ace)
 	if err != nil {
 		return nil, err
 	}
@@ -70,13 +73,13 @@ func (a *adminCostEstimationSettings) Read(ctx context.Context) (*AdminCostEstim
 
 // Update updates the cost-estimation settings.
 func (a *adminCostEstimationSettings) Update(ctx context.Context, options AdminCostEstimationSettingOptions) (*AdminCostEstimationSetting, error) {
-	req, err := a.client.newRequest("PATCH", "admin/cost-estimation-settings", &options)
+	req, err := a.client.NewRequest("PATCH", "admin/cost-estimation-settings", &options)
 	if err != nil {
 		return nil, err
 	}
 
 	ace := &AdminCostEstimationSetting{}
-	err = a.client.do(ctx, req, ace)
+	err = req.Do(ctx, ace)
 	if err != nil {
 		return nil, err
 	}

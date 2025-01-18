@@ -1,20 +1,30 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
 	"context"
 	"fmt"
 	"net/url"
+	"reflect"
 	"time"
 )
 
 // Compile-time proof of interface implementation.
 var _ AdminTerraformVersions = (*adminTerraformVersions)(nil)
 
+const (
+	linux = "linux"
+	amd64 = "amd64"
+	arm64 = "arm64"
+)
+
 // AdminTerraformVersions describes all the admin terraform versions related methods that
 // the Terraform Enterprise API supports.
 // Note that admin terraform versions are only available in Terraform Enterprise.
 //
-// TFE API docs: https://www.terraform.io/docs/cloud/api/admin/terraform-versions.html
+// TFE API docs: https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/terraform-versions
 type AdminTerraformVersions interface {
 	// List all the terraform versions.
 	List(ctx context.Context, options *AdminTerraformVersionsListOptions) (*AdminTerraformVersionsList, error)
@@ -52,6 +62,13 @@ type AdminTerraformVersion struct {
 	CreatedAt        time.Time `jsonapi:"attr,created-at,iso8601"`
 }
 
+type ToolVersionArchitectureOptions struct {
+	URL  string `json:"url"`
+	Sha  string `json:"sha"`
+	OS   string `json:"os"`
+	Arch string `json:"arch"`
+}
+
 // AdminTerraformVersionsListOptions represents the options for listing
 // terraform versions.
 type AdminTerraformVersionsListOptions struct {
@@ -65,21 +82,22 @@ type AdminTerraformVersionsListOptions struct {
 }
 
 // AdminTerraformVersionCreateOptions for creating a terraform version.
-// https://www.terraform.io/docs/cloud/api/admin/terraform-versions.html#request-body
+// https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/terraform-versions#request-body
 type AdminTerraformVersionCreateOptions struct {
-	Type             string  `jsonapi:"primary,terraform-versions"`
-	Version          *string `jsonapi:"attr,version"` // Required
-	URL              *string `jsonapi:"attr,url"`     // Required
-	Sha              *string `jsonapi:"attr,sha"`     // Required
-	Official         *bool   `jsonapi:"attr,official,omitempty"`
-	Deprecated       *bool   `jsonapi:"attr,deprecated,omitempty"`
-	DeprecatedReason *string `jsonapi:"attr,deprecated-reason,omitempty"`
-	Enabled          *bool   `jsonapi:"attr,enabled,omitempty"`
-	Beta             *bool   `jsonapi:"attr,beta,omitempty"`
+	Type             string                            `jsonapi:"primary,terraform-versions"`
+	Version          *string                           `jsonapi:"attr,version"` // Required
+	URL              *string                           `jsonapi:"attr,url"`     // Required
+	Sha              *string                           `jsonapi:"attr,sha"`     // Required
+	Official         *bool                             `jsonapi:"attr,official,omitempty"`
+	Deprecated       *bool                             `jsonapi:"attr,deprecated,omitempty"`
+	DeprecatedReason *string                           `jsonapi:"attr,deprecated-reason,omitempty"`
+	Enabled          *bool                             `jsonapi:"attr,enabled,omitempty"`
+	Beta             *bool                             `jsonapi:"attr,beta,omitempty"`
+	Archs            []*ToolVersionArchitectureOptions `jsonapi:"attr,archs,omitempty"`
 }
 
 // AdminTerraformVersionUpdateOptions for updating terraform version.
-// https://www.terraform.io/docs/cloud/api/admin/terraform-versions.html#request-body
+// https://developer.hashicorp.com/terraform/enterprise/api-docs/admin/terraform-versions#request-body
 type AdminTerraformVersionUpdateOptions struct {
 	Type             string  `jsonapi:"primary,terraform-versions"`
 	Version          *string `jsonapi:"attr,version,omitempty"`
@@ -100,13 +118,13 @@ type AdminTerraformVersionsList struct {
 
 // List all the terraform versions.
 func (a *adminTerraformVersions) List(ctx context.Context, options *AdminTerraformVersionsListOptions) (*AdminTerraformVersionsList, error) {
-	req, err := a.client.newRequest("GET", "admin/terraform-versions", options)
+	req, err := a.client.NewRequest("GET", "admin/terraform-versions", options)
 	if err != nil {
 		return nil, err
 	}
 
 	tvl := &AdminTerraformVersionsList{}
-	err = a.client.do(ctx, req, tvl)
+	err = req.Do(ctx, tvl)
 	if err != nil {
 		return nil, err
 	}
@@ -120,14 +138,14 @@ func (a *adminTerraformVersions) Read(ctx context.Context, id string) (*AdminTer
 		return nil, ErrInvalidTerraformVersionID
 	}
 
-	u := fmt.Sprintf("admin/terraform-versions/%s", url.QueryEscape(id))
-	req, err := a.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("admin/terraform-versions/%s", url.PathEscape(id))
+	req, err := a.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	tfv := &AdminTerraformVersion{}
-	err = a.client.do(ctx, req, tfv)
+	err = req.Do(ctx, tfv)
 	if err != nil {
 		return nil, err
 	}
@@ -140,17 +158,16 @@ func (a *adminTerraformVersions) Create(ctx context.Context, options AdminTerraf
 	if err := options.valid(); err != nil {
 		return nil, err
 	}
-	req, err := a.client.newRequest("POST", "admin/terraform-versions", &options)
+	req, err := a.client.NewRequest("POST", "admin/terraform-versions", &options)
 	if err != nil {
 		return nil, err
 	}
 
 	tfv := &AdminTerraformVersion{}
-	err = a.client.do(ctx, req, tfv)
+	err = req.Do(ctx, tfv)
 	if err != nil {
 		return nil, err
 	}
-
 	return tfv, nil
 }
 
@@ -160,14 +177,14 @@ func (a *adminTerraformVersions) Update(ctx context.Context, id string, options 
 		return nil, ErrInvalidTerraformVersionID
 	}
 
-	u := fmt.Sprintf("admin/terraform-versions/%s", url.QueryEscape(id))
-	req, err := a.client.newRequest("PATCH", u, &options)
+	u := fmt.Sprintf("admin/terraform-versions/%s", url.PathEscape(id))
+	req, err := a.client.NewRequest("PATCH", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	tfv := &AdminTerraformVersion{}
-	err = a.client.do(ctx, req, tfv)
+	err = req.Do(ctx, tfv)
 	if err != nil {
 		return nil, err
 	}
@@ -181,28 +198,35 @@ func (a *adminTerraformVersions) Delete(ctx context.Context, id string) error {
 		return ErrInvalidTerraformVersionID
 	}
 
-	u := fmt.Sprintf("admin/terraform-versions/%s", url.QueryEscape(id))
-	req, err := a.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("admin/terraform-versions/%s", url.PathEscape(id))
+	req, err := a.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return a.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 func (o AdminTerraformVersionCreateOptions) valid() error {
-	if (o == AdminTerraformVersionCreateOptions{}) {
+	if (reflect.DeepEqual(o, AdminTerraformVersionCreateOptions{})) {
 		return ErrRequiredTFVerCreateOps
 	}
 	if !validString(o.Version) {
 		return ErrRequiredVersion
 	}
-	if !validString(o.URL) {
-		return ErrRequiredURL
+	if !o.validArch() && (!validString(o.URL) || !validString(o.Sha)) {
+		return ErrRequiredArchOrURLAndSha
 	}
-	if !validString(o.Sha) {
-		return ErrRequiredSha
-	}
-
 	return nil
+}
+
+func (o AdminTerraformVersionCreateOptions) validArch() bool {
+	var valid bool
+	for _, a := range o.Archs {
+		valid = validString(&a.URL) && validString(&a.Sha) && a.OS == linux && (a.Arch == amd64 || a.Arch == arm64)
+		if valid {
+			break
+		}
+	}
+	return valid
 }

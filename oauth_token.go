@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -14,7 +17,7 @@ var _ OAuthTokens = (*oAuthTokens)(nil)
 // Terraform Enterprise API supports.
 //
 // TFE API docs:
-// https://www.terraform.io/docs/cloud/api/oauth-tokens.html
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/oauth-tokens
 type OAuthTokens interface {
 	// List all the OAuth tokens for a given organization.
 	List(ctx context.Context, organization string, options *OAuthTokenListOptions) (*OAuthTokenList, error)
@@ -76,14 +79,14 @@ func (s *oAuthTokens) List(ctx context.Context, organization string, options *OA
 		return nil, ErrInvalidOrg
 	}
 
-	u := fmt.Sprintf("organizations/%s/oauth-tokens", url.QueryEscape(organization))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("organizations/%s/oauth-tokens", url.PathEscape(organization))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	otl := &OAuthTokenList{}
-	err = s.client.do(ctx, req, otl)
+	err = req.Do(ctx, otl)
 	if err != nil {
 		return nil, err
 	}
@@ -97,14 +100,14 @@ func (s *oAuthTokens) Read(ctx context.Context, oAuthTokenID string) (*OAuthToke
 		return nil, ErrInvalidOauthTokenID
 	}
 
-	u := fmt.Sprintf("oauth-tokens/%s", url.QueryEscape(oAuthTokenID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("oauth-tokens/%s", url.PathEscape(oAuthTokenID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	ot := &OAuthToken{}
-	err = s.client.do(ctx, req, ot)
+	err = req.Do(ctx, ot)
 	if err != nil {
 		return nil, err
 	}
@@ -118,14 +121,14 @@ func (s *oAuthTokens) Update(ctx context.Context, oAuthTokenID string, options O
 		return nil, ErrInvalidOauthTokenID
 	}
 
-	u := fmt.Sprintf("oauth-tokens/%s", url.QueryEscape(oAuthTokenID))
-	req, err := s.client.newRequest("PATCH", u, &options)
+	u := fmt.Sprintf("oauth-tokens/%s", url.PathEscape(oAuthTokenID))
+	req, err := s.client.NewRequest("PATCH", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	ot := &OAuthToken{}
-	err = s.client.do(ctx, req, ot)
+	err = req.Do(ctx, ot)
 	if err != nil {
 		return nil, err
 	}
@@ -139,11 +142,11 @@ func (s *oAuthTokens) Delete(ctx context.Context, oAuthTokenID string) error {
 		return ErrInvalidOauthTokenID
 	}
 
-	u := fmt.Sprintf("oauth-tokens/%s", url.QueryEscape(oAuthTokenID))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("oauth-tokens/%s", url.PathEscape(oAuthTokenID))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }

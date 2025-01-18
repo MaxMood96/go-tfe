@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -10,9 +13,8 @@ import (
 var _ RunTasks = (*runTasks)(nil)
 
 // RunTasks represents all the run task related methods in the context of an organization
-// that the Terraform Cloud/Enterprise API supports.
-// **Note: This API is still in BETA and subject to change.**
-// https://www.terraform.io/cloud-docs/api-docs/run-tasks#run-tasks-api
+// that the HCP Terraform and Terraform Enterprise API supports.
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/run-tasks/run-tasks#run-tasks-api
 type RunTasks interface {
 	// Create a run task for an organization
 	Create(ctx context.Context, organization string, options RunTaskCreateOptions) (*RunTask, error)
@@ -36,21 +38,31 @@ type RunTasks interface {
 	AttachToWorkspace(ctx context.Context, workspaceID string, runTaskID string, enforcementLevel TaskEnforcementLevel) (*WorkspaceRunTask, error)
 }
 
-// runTasks implements  RunTasks
+// runTasks implements RunTasks
 type runTasks struct {
 	client *Client
 }
 
-// RunTask represents a TFC/E run task
+// RunTask represents a HCP Terraform or Terraform Enterprise run task
 type RunTask struct {
-	ID       string  `jsonapi:"primary,tasks"`
-	Name     string  `jsonapi:"attr,name"`
-	URL      string  `jsonapi:"attr,url"`
-	Category string  `jsonapi:"attr,category"`
-	HMACKey  *string `jsonapi:"attr,hmac-key,omitempty"`
+	ID          string         `jsonapi:"primary,tasks"`
+	Name        string         `jsonapi:"attr,name"`
+	URL         string         `jsonapi:"attr,url"`
+	Description string         `jsonapi:"attr,description"`
+	Category    string         `jsonapi:"attr,category"`
+	HMACKey     *string        `jsonapi:"attr,hmac-key,omitempty"`
+	Enabled     bool           `jsonapi:"attr,enabled"`
+	Global      *GlobalRunTask `jsonapi:"attr,global-configuration,omitempty"`
 
 	Organization      *Organization       `jsonapi:"relation,organization"`
 	WorkspaceRunTasks []*WorkspaceRunTask `jsonapi:"relation,workspace-tasks"`
+}
+
+// GlobalRunTask represents the global configuration of a HCP Terraform or Terraform Enterprise run task
+type GlobalRunTask struct {
+	Enabled          bool                 `jsonapi:"attr,enabled"`
+	Stages           []Stage              `jsonapi:"attr,stages"`
+	EnforcementLevel TaskEnforcementLevel `jsonapi:"attr,enforcement-level"`
 }
 
 // RunTaskList represents a list of run tasks
@@ -60,7 +72,7 @@ type RunTaskList struct {
 }
 
 // RunTaskIncludeOpt represents the available options for include query params.
-// https://www.terraform.io/cloud-docs/api-docs/run-tasks#list-run-tasks
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/run-tasks/run-tasks#list-run-tasks
 type RunTaskIncludeOpt string
 
 const (
@@ -72,15 +84,22 @@ const (
 type RunTaskListOptions struct {
 	ListOptions
 	// Optional: A list of relations to include with a run task. See available resources:
-	// https://www.terraform.io/cloud-docs/api-docs/run-tasks#list-run-tasks
+	// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/run-tasks/run-tasks#list-run-tasks
 	Include []RunTaskIncludeOpt `url:"include,omitempty"`
 }
 
 // RunTaskReadOptions represents the set of options for reading a run task
 type RunTaskReadOptions struct {
 	// Optional: A list of relations to include with a run task. See available resources:
-	// https://www.terraform.io/cloud-docs/api-docs/run-tasks#list-run-tasks
+	// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/run-tasks/run-tasks#list-run-tasks
 	Include []RunTaskIncludeOpt `url:"include,omitempty"`
+}
+
+// GlobalRunTask represents the optional global configuration of a HCP Terraform or Terraform Enterprise run task
+type GlobalRunTaskOptions struct {
+	Enabled          *bool                 `jsonapi:"attr,enabled,omitempty"`
+	Stages           *[]Stage              `jsonapi:"attr,stages,omitempty"`
+	EnforcementLevel *TaskEnforcementLevel `jsonapi:"attr,enforcement-level,omitempty"`
 }
 
 // RunTaskCreateOptions represents the set of options for creating a run task
@@ -97,11 +116,20 @@ type RunTaskCreateOptions struct {
 	// Required: The URL to send a run task payload
 	URL string `jsonapi:"attr,url"`
 
+	// Optional: Description of the task
+	Description *string `jsonapi:"attr,description"`
+
 	// Required: Must be "task"
 	Category string `jsonapi:"attr,category"`
 
 	// Optional: An HMAC key to verify the run task
 	HMACKey *string `jsonapi:"attr,hmac-key,omitempty"`
+
+	// Optional: Whether the task should be enabled
+	Enabled *bool `jsonapi:"attr,enabled,omitempty"`
+
+	// Optional: Whether the task contains global configuration
+	Global *GlobalRunTaskOptions `jsonapi:"attr,global-configuration,omitempty"`
 }
 
 // RunTaskUpdateOptions represents the set of options for updating an organization's run task
@@ -118,11 +146,20 @@ type RunTaskUpdateOptions struct {
 	// Optional: The URL to send a run task payload, defaults to previous value
 	URL *string `jsonapi:"attr,url,omitempty"`
 
+	// Optional: An optional description of the task
+	Description *string `jsonapi:"attr,description,omitempty"`
+
 	// Optional: Must be "task", defaults to "task"
 	Category *string `jsonapi:"attr,category,omitempty"`
 
 	// Optional: An HMAC key to verify the run task
 	HMACKey *string `jsonapi:"attr,hmac-key,omitempty"`
+
+	// Optional: Whether the task should be enabled
+	Enabled *bool `jsonapi:"attr,enabled,omitempty"`
+
+	// Optional: Whether the task contains global configuration
+	Global *GlobalRunTaskOptions `jsonapi:"attr,global-configuration,omitempty"`
 }
 
 // Create is used to create a new run task for an organization
@@ -135,19 +172,19 @@ func (s *runTasks) Create(ctx context.Context, organization string, options RunT
 		return nil, err
 	}
 
-	u := fmt.Sprintf("organizations/%s/tasks", url.QueryEscape(organization))
-	req, err := s.client.newRequest("POST", u, &options)
+	u := fmt.Sprintf("organizations/%s/tasks", url.PathEscape(organization))
+	req, err := s.client.NewRequest("POST", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
-	r := &RunTask{}
-	err = s.client.do(ctx, req, r)
+	r := &internalRunTask{}
+	err = req.Do(ctx, r)
 	if err != nil {
 		return nil, err
 	}
 
-	return r, nil
+	return r.ToRunTask(), nil
 }
 
 // List all the run tasks for an organization
@@ -159,19 +196,19 @@ func (s *runTasks) List(ctx context.Context, organization string, options *RunTa
 		return nil, err
 	}
 
-	u := fmt.Sprintf("organizations/%s/tasks", url.QueryEscape(organization))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("organizations/%s/tasks", url.PathEscape(organization))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
-	rl := &RunTaskList{}
-	err = s.client.do(ctx, req, rl)
+	rl := &internalRunTaskList{}
+	err = req.Do(ctx, rl)
 	if err != nil {
 		return nil, err
 	}
 
-	return rl, nil
+	return rl.ToRunTaskList(), nil
 }
 
 // Read is used to read an organization's run task by ID
@@ -188,19 +225,19 @@ func (s *runTasks) ReadWithOptions(ctx context.Context, runTaskID string, option
 		return nil, err
 	}
 
-	u := fmt.Sprintf("tasks/%s", url.QueryEscape(runTaskID))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("tasks/%s", url.PathEscape(runTaskID))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
-	r := &RunTask{}
-	err = s.client.do(ctx, req, r)
+	r := &internalRunTask{}
+	err = req.Do(ctx, r)
 	if err != nil {
 		return nil, err
 	}
 
-	return r, nil
+	return r.ToRunTask(), nil
 }
 
 // Update an existing run task for an organization by ID
@@ -213,19 +250,19 @@ func (s *runTasks) Update(ctx context.Context, runTaskID string, options RunTask
 		return nil, err
 	}
 
-	u := fmt.Sprintf("tasks/%s", url.QueryEscape(runTaskID))
-	req, err := s.client.newRequest("PATCH", u, &options)
+	u := fmt.Sprintf("tasks/%s", url.PathEscape(runTaskID))
+	req, err := s.client.NewRequest("PATCH", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
-	r := &RunTask{}
-	err = s.client.do(ctx, req, r)
+	r := &internalRunTask{}
+	err = req.Do(ctx, r)
 	if err != nil {
 		return nil, err
 	}
 
-	return r, nil
+	return r.ToRunTask(), nil
 }
 
 // Delete an existing run task for an organization by ID
@@ -235,12 +272,12 @@ func (s *runTasks) Delete(ctx context.Context, runTaskID string) error {
 	}
 
 	u := fmt.Sprintf("tasks/%s", runTaskID)
-	req, err := s.client.newRequest("DELETE", u, nil)
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 // AttachToWorkspace is a convenient method to attach a run task to a workspace. See: WorkspaceRunTasks.Create()
@@ -284,38 +321,9 @@ func (o *RunTaskUpdateOptions) valid() error {
 }
 
 func (o *RunTaskListOptions) valid() error {
-	if o == nil {
-		return nil // nothing to validate
-	}
-
-	if err := validateRunTaskIncludeParams(o.Include); err != nil {
-		return err
-	}
-
 	return nil
 }
 
 func (o *RunTaskReadOptions) valid() error {
-	if o == nil {
-		return nil // nothing to validate
-	}
-
-	if err := validateRunTaskIncludeParams(o.Include); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func validateRunTaskIncludeParams(params []RunTaskIncludeOpt) error {
-	for _, p := range params {
-		switch p {
-		case RunTaskWorkspaceTasks, RunTaskWorkspace:
-			// do nothing
-		default:
-			return ErrInvalidIncludeValue
-		}
-	}
-
 	return nil
 }

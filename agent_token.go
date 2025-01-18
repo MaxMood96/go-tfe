@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -11,10 +14,10 @@ import (
 var _ AgentTokens = (*agentTokens)(nil)
 
 // AgentTokens describes all the agent token related methods that the
-// Terraform Cloud API supports.
+// HCP Terraform API supports.
 //
 // TFE API docs:
-// https://www.terraform.io/docs/cloud/api/agent-tokens.html
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/agent-tokens
 type AgentTokens interface {
 	// List all the agent tokens of the given agent pool.
 	List(ctx context.Context, agentPoolID string) (*AgentTokenList, error)
@@ -34,7 +37,7 @@ type agentTokens struct {
 	client *Client
 }
 
-// AgentToken represents a Terraform Cloud agent token.
+// AgentToken represents a HCP Terraform agent token.
 type AgentToken struct {
 	ID          string    `jsonapi:"primary,authentication-tokens"`
 	CreatedAt   time.Time `jsonapi:"attr,created-at,iso8601"`
@@ -67,14 +70,14 @@ func (s *agentTokens) List(ctx context.Context, agentPoolID string) (*AgentToken
 		return nil, ErrInvalidAgentPoolID
 	}
 
-	u := fmt.Sprintf("agent-pools/%s/authentication-tokens", url.QueryEscape(agentPoolID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("agent-pools/%s/authentication-tokens", url.PathEscape(agentPoolID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	tokenList := &AgentTokenList{}
-	err = s.client.do(ctx, req, tokenList)
+	err = req.Do(ctx, tokenList)
 	if err != nil {
 		return nil, err
 	}
@@ -92,14 +95,14 @@ func (s *agentTokens) Create(ctx context.Context, agentPoolID string, options Ag
 		return nil, ErrAgentTokenDescription
 	}
 
-	u := fmt.Sprintf("agent-pools/%s/authentication-tokens", url.QueryEscape(agentPoolID))
-	req, err := s.client.newRequest("POST", u, &options)
+	u := fmt.Sprintf("agent-pools/%s/authentication-tokens", url.PathEscape(agentPoolID))
+	req, err := s.client.NewRequest("POST", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	at := &AgentToken{}
-	err = s.client.do(ctx, req, at)
+	err = req.Do(ctx, at)
 	if err != nil {
 		return nil, err
 	}
@@ -113,14 +116,14 @@ func (s *agentTokens) Read(ctx context.Context, agentTokenID string) (*AgentToke
 		return nil, ErrInvalidAgentTokenID
 	}
 
-	u := fmt.Sprintf("authentication-tokens/%s", url.QueryEscape(agentTokenID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("authentication-tokens/%s", url.PathEscape(agentTokenID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	at := &AgentToken{}
-	err = s.client.do(ctx, req, at)
+	err = req.Do(ctx, at)
 	if err != nil {
 		return nil, err
 	}
@@ -134,11 +137,11 @@ func (s *agentTokens) Delete(ctx context.Context, agentTokenID string) error {
 		return ErrInvalidAgentTokenID
 	}
 
-	u := fmt.Sprintf("authentication-tokens/%s", url.QueryEscape(agentTokenID))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("authentication-tokens/%s", url.PathEscape(agentTokenID))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }

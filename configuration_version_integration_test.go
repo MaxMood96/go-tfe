@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -7,9 +7,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/hashicorp/go-slug"
+	"errors"
+	"os"
 	"testing"
 	"time"
+
+	slug "github.com/hashicorp/go-slug"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -111,6 +114,77 @@ func TestConfigurationVersionsCreate(t *testing.T) {
 		assert.Nil(t, cv)
 		assert.EqualError(t, err, ErrInvalidWorkspaceID.Error())
 	})
+
+	t.Run("provisional", func(t *testing.T) {
+		cv, err := client.ConfigurationVersions.Create(ctx,
+			wTest.ID,
+			ConfigurationVersionCreateOptions{
+				Provisional: Bool(true),
+			},
+		)
+
+		require.NoError(t, err)
+		assert.True(t, cv.Provisional)
+
+		ws, err := client.Workspaces.ReadByID(ctx, wTest.ID)
+		require.NoError(t, err)
+
+		// Depends on "with valid options"
+		require.NotNil(t, ws.CurrentConfigurationVersion)
+
+		// Provisional configuration version is not the current one
+		assert.NotEqual(t, ws.CurrentConfigurationVersion.ID, cv.ID)
+	})
+}
+
+func TestConfigurationVersionsCreateForRegistryModule(t *testing.T) {
+	skipUnlessBeta(t)
+	client := testClient(t)
+	ctx := context.Background()
+
+	orgTest, orgTestCleanup := createOrganization(t, client)
+	defer orgTestCleanup()
+
+	rmTest, rmTestCleanup := createRegistryModule(t, client, orgTest, PrivateRegistry)
+	defer rmTestCleanup()
+
+	id := RegistryModuleID{
+		Organization: rmTest.Organization.Name,
+		Name:         rmTest.Name,
+		Provider:     rmTest.Provider,
+		Namespace:    rmTest.Namespace,
+		RegistryName: rmTest.RegistryName,
+	}
+
+	t.Run("with valid options", func(t *testing.T) {
+		cv, err := client.ConfigurationVersions.CreateForRegistryModule(ctx, id)
+		assert.NotEmpty(t, cv.UploadURL)
+		require.NoError(t, err)
+
+		// Get a refreshed view of the configuration version.
+		refreshed, err := client.ConfigurationVersions.Read(ctx, cv.ID)
+		require.NoError(t, err)
+		assert.Empty(t, refreshed.UploadURL)
+
+		for _, item := range []*ConfigurationVersion{
+			cv,
+			refreshed,
+		} {
+			assert.NotEmpty(t, item.ID)
+			assert.Empty(t, item.Error)
+			assert.Equal(t, item.Source, ConfigurationSourceAPI)
+			assert.Equal(t, item.Status, ConfigurationPending)
+		}
+	})
+
+	t.Run("with invalid workspace id", func(t *testing.T) {
+		cv, err := client.ConfigurationVersions.CreateForRegistryModule(
+			ctx,
+			RegistryModuleID{},
+		)
+		assert.Nil(t, cv)
+		assert.Equal(t, ErrRequiredName, err)
+	})
 }
 
 func TestConfigurationVersionsRead(t *testing.T) {
@@ -155,22 +229,25 @@ func TestConfigurationVersionsReadWithOptions(t *testing.T) {
 	wTest, wTestCleanup := createWorkspaceWithVCS(t, client, orgTest, WorkspaceCreateOptions{QueueAllRuns: Bool(true)})
 	defer wTestCleanup()
 
-	// Hack: Wait for TFC to ingress the configuration and queue a run
-	time.Sleep(3 * time.Second)
+	w, err := retry(func() (interface{}, error) {
+		w, err := client.Workspaces.ReadByIDWithOptions(ctx, wTest.ID, &WorkspaceReadOptions{
+			Include: []WSIncludeOpt{WSCurrentRunConfigVer},
+		})
 
-	w, err := client.Workspaces.ReadByIDWithOptions(ctx, wTest.ID, &WorkspaceReadOptions{
-		Include: []WSIncludeOpt{WSCurrentRunConfigVer},
+		if err != nil {
+			return nil, err
+		}
+
+		if w.CurrentRun == nil {
+			return nil, errors.New("A run was expected to be found on this workspace as a test pre-condition")
+		}
+
+		return w, nil
 	})
 
-	if err != nil {
-		require.NoError(t, err)
-	}
+	require.NoError(t, err)
 
-	if w.CurrentRun == nil {
-		t.Fatal("A run was expected to be found on this workspace as a test pre-condition")
-	}
-
-	cv := w.CurrentRun.ConfigurationVersion
+	cv := w.(*Workspace).CurrentRun.ConfigurationVersion
 
 	t.Run("when the configuration version exists", func(t *testing.T) {
 		options := &ConfigurationVersionReadOptions{
@@ -180,7 +257,7 @@ func TestConfigurationVersionsReadWithOptions(t *testing.T) {
 		cv, err := client.ConfigurationVersions.ReadWithOptions(ctx, cv.ID, options)
 		require.NoError(t, err)
 
-		assert.NotZero(t, cv.IngressAttributes)
+		require.NotNil(t, cv.IngressAttributes)
 		assert.NotZero(t, cv.IngressAttributes.CommitURL)
 		assert.NotZero(t, cv.IngressAttributes.CommitSHA)
 	})
@@ -201,22 +278,7 @@ func TestConfigurationVersionsUpload(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		// We do this is a small loop, because it can take a second
-		// before the upload is finished.
-		for i := 0; ; i++ {
-			refreshed, err := client.ConfigurationVersions.Read(ctx, cv.ID)
-			require.NoError(t, err)
-
-			if refreshed.Status == ConfigurationUploaded {
-				break
-			}
-
-			if i > 10 {
-				t.Fatal("Timeout waiting for the configuration version to be uploaded")
-			}
-
-			time.Sleep(1 * time.Second)
-		}
+		WaitUntilStatus(t, client, cv, ConfigurationUploaded, 60)
 	})
 
 	t.Run("without a valid upload URL", func(t *testing.T) {
@@ -238,11 +300,49 @@ func TestConfigurationVersionsUpload(t *testing.T) {
 	})
 }
 
-func TestConfigurationVersionsArchive(t *testing.T) {
+func TestConfigurationVersionsUploadTarGzip(t *testing.T) {
 	client := testClient(t)
 	ctx := context.Background()
 
 	cv, cvCleanup := createConfigurationVersion(t, client, nil)
+	t.Cleanup(cvCleanup)
+
+	t.Run("with custom go-slug", func(t *testing.T) {
+		packer, err := slug.NewPacker(
+			slug.DereferenceSymlinks(),
+			slug.ApplyTerraformIgnore(),
+		)
+		require.NoError(t, err)
+
+		body := bytes.NewBuffer(nil)
+		_, err = packer.Pack("test-fixtures/config-version", body)
+		require.NoError(t, err)
+
+		err = client.ConfigurationVersions.UploadTarGzip(ctx, cv.UploadURL, body)
+		require.NoError(t, err)
+	})
+
+	t.Run("with custom tar archive", func(t *testing.T) {
+		archivePath := "test-fixtures/config-archive.tar.gz"
+		createTarGzipArchive(t, []string{"test-fixtures/config-version/main.tf"}, archivePath)
+
+		archive, err := os.Open(archivePath)
+		require.NoError(t, err)
+		defer archive.Close()
+
+		err = client.ConfigurationVersions.UploadTarGzip(ctx, cv.UploadURL, archive)
+		require.NoError(t, err)
+	})
+}
+
+func TestConfigurationVersionsArchive(t *testing.T) {
+	client := testClient(t)
+	ctx := context.Background()
+
+	w, wCleanup := createWorkspace(t, client, nil)
+	defer wCleanup()
+
+	cv, cvCleanup := createConfigurationVersion(t, client, w)
 	defer cvCleanup()
 
 	t.Run("when the configuration version exists and has been uploaded", func(t *testing.T) {
@@ -253,42 +353,29 @@ func TestConfigurationVersionsArchive(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		// We do this is a small loop, because it can take a second
-		// before the upload is finished.
-		for i := 0; ; i++ {
-			refreshed, err := client.ConfigurationVersions.Read(ctx, cv.ID)
-			require.NoError(t, err)
+		WaitUntilStatus(t, client, cv, ConfigurationUploaded, 60)
 
-			if refreshed.Status == ConfigurationUploaded {
-				break
-			}
+		// configuration version should not be archived, since it's the latest version
+		err = client.ConfigurationVersions.Archive(ctx, cv.ID)
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "transition not allowed")
+		assert.ErrorContains(t, err, "configuration could not be archived because it is current")
 
-			if i > 10 {
-				t.Fatal("Timeout waiting for the configuration version to be uploaded")
-			}
-
-			time.Sleep(1 * time.Second)
-		}
+		// create subsequent version, since the latest configuration version cannot be archived
+		newCv, newCvCleanup := createConfigurationVersion(t, client, w)
+		err = client.ConfigurationVersions.Upload(
+			ctx,
+			newCv.UploadURL,
+			"test-fixtures/config-version",
+		)
+		require.NoError(t, err)
+		defer newCvCleanup()
+		WaitUntilStatus(t, client, newCv, ConfigurationUploaded, 60)
 
 		err = client.ConfigurationVersions.Archive(ctx, cv.ID)
 		require.NoError(t, err)
 
-		// We do this is a small loop, because it can take a second
-		// before the archive is finished.
-		for i := 0; ; i++ {
-			refreshed, err := client.ConfigurationVersions.Read(ctx, cv.ID)
-			require.NoError(t, err)
-
-			if refreshed.Status == ConfigurationArchived {
-				break
-			}
-
-			if i > 10 {
-				t.Fatal("Timeout waiting for the configuration version to be archived")
-			}
-
-			time.Sleep(1 * time.Second)
-		}
+		WaitUntilStatus(t, client, cv, ConfigurationArchived, 60)
 	})
 
 	t.Run("when the configuration version does not exist", func(t *testing.T) {
@@ -319,7 +406,7 @@ func TestConfigurationVersionsDownload(t *testing.T) {
 		cvFile, err := client.ConfigurationVersions.Download(ctx, uploadedCv.ID)
 
 		assert.NotNil(t, cvFile)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, bytes.Equal(cvFile, expectedCvFile.Bytes()), "Configuration version should match")
 	})
 
@@ -355,6 +442,8 @@ func TestConfigurationVersions_Unmarshal(t *testing.T) {
 					"finished-at": "2020-03-16T23:15:59+00:00",
 					"started-at":  "2019-03-16T23:23:59+00:00",
 				},
+				"speculative": true,
+				"provisional": true,
 			},
 		},
 	}
@@ -379,4 +468,52 @@ func TestConfigurationVersions_Unmarshal(t *testing.T) {
 	assert.Equal(t, cv.Status, ConfigurationUploaded)
 	assert.Equal(t, cv.StatusTimestamps.FinishedAt, finishedParsedTime)
 	assert.Equal(t, cv.StatusTimestamps.StartedAt, startedParsedTime)
+	assert.Equal(t, cv.Provisional, true)
+	assert.Equal(t, cv.Speculative, true)
+}
+
+func TestConfigurationVersions_ManageBackingData(t *testing.T) {
+	skipUnlessEnterprise(t)
+
+	client := testClient(t)
+	ctx := context.Background()
+
+	workspace, workspaceCleanup := createWorkspace(t, client, nil)
+	t.Cleanup(workspaceCleanup)
+
+	nonCurrentCv, uploadedCvCleanup := createUploadedConfigurationVersion(t, client, workspace)
+	defer uploadedCvCleanup()
+
+	_, uploadedCvCleanup = createUploadedConfigurationVersion(t, client, workspace)
+	defer uploadedCvCleanup()
+
+	t.Run("soft delete backing data", func(t *testing.T) {
+		err := client.ConfigurationVersions.SoftDeleteBackingData(ctx, nonCurrentCv.ID)
+		require.NoError(t, err)
+
+		_, err = client.ConfigurationVersions.Download(ctx, nonCurrentCv.ID)
+		assert.Equal(t, ErrResourceNotFound, err)
+	})
+
+	t.Run("restore backing data", func(t *testing.T) {
+		err := client.ConfigurationVersions.RestoreBackingData(ctx, nonCurrentCv.ID)
+		require.NoError(t, err)
+
+		_, err = client.ConfigurationVersions.Download(ctx, nonCurrentCv.ID)
+		require.NoError(t, err)
+	})
+
+	t.Run("permanently delete backing data", func(t *testing.T) {
+		err := client.ConfigurationVersions.SoftDeleteBackingData(ctx, nonCurrentCv.ID)
+		require.NoError(t, err)
+
+		err = client.ConfigurationVersions.PermanentlyDeleteBackingData(ctx, nonCurrentCv.ID)
+		require.NoError(t, err)
+
+		err = client.ConfigurationVersions.RestoreBackingData(ctx, nonCurrentCv.ID)
+		require.ErrorContainsf(t, err, "transition not allowed", "Restore backing data should fail")
+
+		_, err = client.ConfigurationVersions.Download(ctx, nonCurrentCv.ID)
+		assert.Equal(t, ErrResourceNotFound, err)
+	})
 }

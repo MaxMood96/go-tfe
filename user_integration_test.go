@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -16,13 +16,18 @@ func TestUsersReadCurrent(t *testing.T) {
 	ctx := context.Background()
 
 	u, err := client.Users.ReadCurrent(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
+
 	assert.NotEmpty(t, u.ID)
 	assert.NotEmpty(t, u.AvatarURL)
 	assert.NotEmpty(t, u.Username)
 
 	t.Run("two factor options are decoded", func(t *testing.T) {
 		assert.NotNil(t, u.TwoFactor)
+	})
+
+	t.Run("permissions are decoded", func(t *testing.T) {
+		assert.NotNil(t, u.Permissions)
 	})
 }
 
@@ -49,7 +54,7 @@ func TestUsersUpdate(t *testing.T) {
 		require.NoError(t, err)
 
 		u, err := client.Users.ReadCurrent(ctx)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, u, uTest)
 	})
 
@@ -60,7 +65,7 @@ func TestUsersUpdate(t *testing.T) {
 		require.NoError(t, err)
 
 		u, err := client.Users.ReadCurrent(ctx)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "NewTestUsername", u.Username)
 	})
 
@@ -81,7 +86,7 @@ func TestUsersUpdate(t *testing.T) {
 			t.Fatalf("cannot test with user %q because both email and unconfirmed email are empty", u.ID)
 		}
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "newtestemail@hashicorp.com", email)
 	})
 

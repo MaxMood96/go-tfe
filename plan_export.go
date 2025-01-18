@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -14,7 +17,7 @@ var _ PlanExports = (*planExports)(nil)
 // PlanExports describes all the plan export related methods that the Terraform
 // Enterprise API supports.
 //
-// TFE API docs: https://www.terraform.io/docs/cloud/api/plan-exports.html
+// TFE API docs: https://developer.hashicorp.com/terraform/cloud-docs/api-docs/plan-exports
 type PlanExports interface {
 	// Export a plan by its ID with the given options.
 	Create(ctx context.Context, options PlanExportCreateOptions) (*PlanExport, error)
@@ -93,13 +96,13 @@ func (s *planExports) Create(ctx context.Context, options PlanExportCreateOption
 		return nil, err
 	}
 
-	req, err := s.client.newRequest("POST", "plan-exports", &options)
+	req, err := s.client.NewRequest("POST", "plan-exports", &options)
 	if err != nil {
 		return nil, err
 	}
 
 	pe := &PlanExport{}
-	err = s.client.do(ctx, req, pe)
+	err = req.Do(ctx, pe)
 	if err != nil {
 		return nil, err
 	}
@@ -113,14 +116,14 @@ func (s *planExports) Read(ctx context.Context, planExportID string) (*PlanExpor
 		return nil, ErrInvalidPlanExportID
 	}
 
-	u := fmt.Sprintf("plan-exports/%s", url.QueryEscape(planExportID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("plan-exports/%s", url.PathEscape(planExportID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	pe := &PlanExport{}
-	err = s.client.do(ctx, req, pe)
+	err = req.Do(ctx, pe)
 	if err != nil {
 		return nil, err
 	}
@@ -134,13 +137,13 @@ func (s *planExports) Delete(ctx context.Context, planExportID string) error {
 		return ErrInvalidPlanExportID
 	}
 
-	u := fmt.Sprintf("plan-exports/%s", url.QueryEscape(planExportID))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("plan-exports/%s", url.PathEscape(planExportID))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 // Download a plan export's data. Data is exported in a .tar.gz format.
@@ -149,14 +152,14 @@ func (s *planExports) Download(ctx context.Context, planExportID string) ([]byte
 		return nil, ErrInvalidPlanExportID
 	}
 
-	u := fmt.Sprintf("plan-exports/%s/download", url.QueryEscape(planExportID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("plan-exports/%s/download", url.PathEscape(planExportID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	var buf bytes.Buffer
-	err = s.client.do(ctx, req, &buf)
+	err = req.Do(ctx, &buf)
 	if err != nil {
 		return nil, err
 	}

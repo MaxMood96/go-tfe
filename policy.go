@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -14,7 +17,7 @@ var _ Policies = (*policies)(nil)
 // Policies describes all the policy related methods that the Terraform
 // Enterprise API supports.
 //
-// TFE API docs: https://www.terraform.io/docs/cloud/api/policies.html
+// TFE API docs: https://developer.hashicorp.com/terraform/cloud-docs/api-docs/policies
 type Policies interface {
 	// List all the policies for a given organization
 	List(ctx context.Context, organization string, options *PolicyListOptions) (*PolicyList, error)
@@ -48,9 +51,10 @@ type EnforcementLevel string
 
 // List the available enforcement types.
 const (
-	EnforcementAdvisory EnforcementLevel = "advisory"
-	EnforcementHard     EnforcementLevel = "hard-mandatory"
-	EnforcementSoft     EnforcementLevel = "soft-mandatory"
+	EnforcementAdvisory  EnforcementLevel = "advisory"
+	EnforcementHard      EnforcementLevel = "hard-mandatory"
+	EnforcementSoft      EnforcementLevel = "soft-mandatory"
+	EnforcementMandatory EnforcementLevel = "mandatory"
 )
 
 // PolicyList represents a list of policies..
@@ -61,12 +65,16 @@ type PolicyList struct {
 
 // Policy represents a Terraform Enterprise policy.
 type Policy struct {
-	ID             string         `jsonapi:"primary,policies"`
-	Name           string         `jsonapi:"attr,name"`
-	Description    string         `jsonapi:"attr,description"`
-	Enforce        []*Enforcement `jsonapi:"attr,enforce"`
-	PolicySetCount int            `jsonapi:"attr,policy-set-count"`
-	UpdatedAt      time.Time      `jsonapi:"attr,updated-at,iso8601"`
+	ID          string     `jsonapi:"primary,policies"`
+	Name        string     `jsonapi:"attr,name"`
+	Kind        PolicyKind `jsonapi:"attr,kind"`
+	Query       *string    `jsonapi:"attr,query"`
+	Description string     `jsonapi:"attr,description"`
+	// Deprecated: Use EnforcementLevel instead.
+	Enforce          []*Enforcement   `jsonapi:"attr,enforce"`
+	EnforcementLevel EnforcementLevel `jsonapi:"attr,enforcement-level"`
+	PolicySetCount   int              `jsonapi:"attr,policy-set-count"`
+	UpdatedAt        time.Time        `jsonapi:"attr,updated-at,iso8601"`
 
 	// Relations
 	Organization *Organization `jsonapi:"relation,organization"`
@@ -90,6 +98,9 @@ type PolicyListOptions struct {
 
 	// Optional: A search string (partial policy name) used to filter the results.
 	Search string `url:"search[name],omitempty"`
+
+	// Optional: A kind string used to filter the results by the policy kind.
+	Kind PolicyKind `url:"filter[kind],omitempty"`
 }
 
 // PolicyCreateOptions represents the options for creating a new policy.
@@ -103,11 +114,23 @@ type PolicyCreateOptions struct {
 	// Required: The name of the policy.
 	Name *string `jsonapi:"attr,name"`
 
+	// Optional: The underlying technology that the policy supports. Defaults to Sentinel if not specified for PolicyCreate.
+	Kind PolicyKind `jsonapi:"attr,kind,omitempty"`
+
+	// Optional: The query passed to policy evaluation to determine the result of the policy. Only valid for OPA.
+	Query *string `jsonapi:"attr,query,omitempty"`
+
 	// Optional: A description of the policy's purpose.
 	Description *string `jsonapi:"attr,description,omitempty"`
 
-	// Required: The enforcements of the policy.
-	Enforce []*EnforcementOptions `jsonapi:"attr,enforce"`
+	// The enforcements of the policy.
+	//
+	// Deprecated: Use EnforcementLevel instead.
+	Enforce []*EnforcementOptions `jsonapi:"attr,enforce,omitempty"`
+
+	// Required: The enforcement level of the policy.
+	// Either EnforcementLevel or Enforce must be set.
+	EnforcementLevel *EnforcementLevel `jsonapi:"attr,enforcement-level,omitempty"`
 }
 
 // PolicyUpdateOptions represents the options for updating a policy.
@@ -121,8 +144,16 @@ type PolicyUpdateOptions struct {
 	// Optional: A description of the policy's purpose.
 	Description *string `jsonapi:"attr,description,omitempty"`
 
+	// Optional: The query passed to policy evaluation to determine the result of the policy. Only valid for OPA.
+	Query *string `jsonapi:"attr,query,omitempty"`
+
 	// Optional: The enforcements of the policy.
+	//
+	// Deprecated: Use EnforcementLevel instead.
 	Enforce []*EnforcementOptions `jsonapi:"attr,enforce,omitempty"`
+
+	// Optional: The enforcement level of the policy.
+	EnforcementLevel *EnforcementLevel `jsonapi:"attr,enforcement-level,omitempty"`
 }
 
 // List all the policies for a given organization
@@ -131,14 +162,14 @@ func (s *policies) List(ctx context.Context, organization string, options *Polic
 		return nil, ErrInvalidOrg
 	}
 
-	u := fmt.Sprintf("organizations/%s/policies", url.QueryEscape(organization))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("organizations/%s/policies", url.PathEscape(organization))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	pl := &PolicyList{}
-	err = s.client.do(ctx, req, pl)
+	err = req.Do(ctx, pl)
 	if err != nil {
 		return nil, err
 	}
@@ -155,14 +186,14 @@ func (s *policies) Create(ctx context.Context, organization string, options Poli
 		return nil, err
 	}
 
-	u := fmt.Sprintf("organizations/%s/policies", url.QueryEscape(organization))
-	req, err := s.client.newRequest("POST", u, &options)
+	u := fmt.Sprintf("organizations/%s/policies", url.PathEscape(organization))
+	req, err := s.client.NewRequest("POST", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	p := &Policy{}
-	err = s.client.do(ctx, req, p)
+	err = req.Do(ctx, p)
 	if err != nil {
 		return nil, err
 	}
@@ -176,14 +207,14 @@ func (s *policies) Read(ctx context.Context, policyID string) (*Policy, error) {
 		return nil, ErrInvalidPolicyID
 	}
 
-	u := fmt.Sprintf("policies/%s", url.QueryEscape(policyID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("policies/%s", url.PathEscape(policyID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	p := &Policy{}
-	err = s.client.do(ctx, req, p)
+	err = req.Do(ctx, p)
 	if err != nil {
 		return nil, err
 	}
@@ -197,14 +228,14 @@ func (s *policies) Update(ctx context.Context, policyID string, options PolicyUp
 		return nil, ErrInvalidPolicyID
 	}
 
-	u := fmt.Sprintf("policies/%s", url.QueryEscape(policyID))
-	req, err := s.client.newRequest("PATCH", u, &options)
+	u := fmt.Sprintf("policies/%s", url.PathEscape(policyID))
+	req, err := s.client.NewRequest("PATCH", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	p := &Policy{}
-	err = s.client.do(ctx, req, p)
+	err = req.Do(ctx, p)
 	if err != nil {
 		return nil, err
 	}
@@ -218,13 +249,13 @@ func (s *policies) Delete(ctx context.Context, policyID string) error {
 		return ErrInvalidPolicyID
 	}
 
-	u := fmt.Sprintf("policies/%s", url.QueryEscape(policyID))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("policies/%s", url.PathEscape(policyID))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 // Upload the policy content of the policy.
@@ -233,13 +264,13 @@ func (s *policies) Upload(ctx context.Context, policyID string, content []byte) 
 		return ErrInvalidPolicyID
 	}
 
-	u := fmt.Sprintf("policies/%s/upload", url.QueryEscape(policyID))
-	req, err := s.client.newRequest("PUT", u, content)
+	u := fmt.Sprintf("policies/%s/upload", url.PathEscape(policyID))
+	req, err := s.client.NewRequest("PUT", u, content)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 // Download the policy content of the policy.
@@ -248,14 +279,14 @@ func (s *policies) Download(ctx context.Context, policyID string) ([]byte, error
 		return nil, ErrInvalidPolicyID
 	}
 
-	u := fmt.Sprintf("policies/%s/download", url.QueryEscape(policyID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("policies/%s/download", url.PathEscape(policyID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	var buf bytes.Buffer
-	err = s.client.do(ctx, req, &buf)
+	err = req.Do(ctx, &buf)
 	if err != nil {
 		return nil, err
 	}
@@ -270,15 +301,23 @@ func (o PolicyCreateOptions) valid() error {
 	if !validStringID(o.Name) {
 		return ErrInvalidName
 	}
-	if o.Enforce == nil {
+	if o.Kind == OPA && !validString(o.Query) {
+		return ErrRequiredQuery
+	}
+	if o.Enforce == nil && o.EnforcementLevel == nil {
 		return ErrRequiredEnforce
 	}
-	for _, e := range o.Enforce {
-		if !validString(e.Path) {
-			return ErrRequiredEnforcementPath
-		}
-		if e.Mode == nil {
-			return ErrRequiredEnforcementMode
+	if o.Enforce != nil && o.EnforcementLevel != nil {
+		return ErrConflictingEnforceEnforcementLevel
+	}
+	if o.Enforce != nil {
+		for _, e := range o.Enforce {
+			if !validString(e.Path) {
+				return ErrRequiredEnforcementPath
+			}
+			if e.Mode == nil {
+				return ErrRequiredEnforcementMode
+			}
 		}
 	}
 	return nil

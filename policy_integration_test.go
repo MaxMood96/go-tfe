@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -16,8 +16,6 @@ import (
 )
 
 func TestPoliciesList(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -29,14 +27,27 @@ func TestPoliciesList(t *testing.T) {
 	pTest2, pTestCleanup2 := createPolicy(t, client, orgTest)
 	defer pTestCleanup2()
 
+	opaOptions := PolicyCreateOptions{
+		Kind:  OPA,
+		Query: String("data.example.rule"),
+		Enforce: []*EnforcementOptions{
+			{
+				Mode: EnforcementMode(EnforcementMandatory),
+			},
+		},
+	}
+	pTest3, pTestCleanup3 := createPolicyWithOptions(t, client, orgTest, opaOptions)
+	defer pTestCleanup3()
+
 	t.Run("without list options", func(t *testing.T) {
 		pl, err := client.Policies.List(ctx, orgTest.Name, nil)
 		require.NoError(t, err)
 		assert.Contains(t, pl.Items, pTest1)
 		assert.Contains(t, pl.Items, pTest2)
+		assert.Contains(t, pl.Items, pTest3)
 
 		assert.Equal(t, 1, pl.CurrentPage)
-		assert.Equal(t, 2, pl.TotalCount)
+		assert.Equal(t, 3, pl.TotalCount)
 	})
 
 	t.Run("with pagination", func(t *testing.T) {
@@ -53,7 +64,7 @@ func TestPoliciesList(t *testing.T) {
 
 		assert.Empty(t, pl.Items)
 		assert.Equal(t, 999, pl.CurrentPage)
-		assert.Equal(t, 2, pl.TotalCount)
+		assert.Equal(t, 3, pl.TotalCount)
 	})
 
 	t.Run("with search", func(t *testing.T) {
@@ -65,6 +76,20 @@ func TestPoliciesList(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Contains(t, pl.Items, pTest1)
+		assert.NotContains(t, pl.Items, pTest2)
+		assert.NotContains(t, pl.Items, pTest3)
+		assert.Equal(t, 1, pl.CurrentPage)
+		assert.Equal(t, 1, pl.TotalCount)
+	})
+
+	t.Run("with filter by kind", func(t *testing.T) {
+		pl, err := client.Policies.List(ctx, orgTest.Name, &PolicyListOptions{
+			Kind: OPA,
+		})
+		require.NoError(t, err)
+
+		assert.Contains(t, pl.Items, pTest3)
+		assert.NotContains(t, pl.Items, pTest1)
 		assert.NotContains(t, pl.Items, pTest2)
 		assert.Equal(t, 1, pl.CurrentPage)
 		assert.Equal(t, 1, pl.TotalCount)
@@ -78,15 +103,13 @@ func TestPoliciesList(t *testing.T) {
 }
 
 func TestPoliciesCreate(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
 
-	t.Run("with valid options", func(t *testing.T) {
+	t.Run("with no kind", func(t *testing.T) {
 		name := randomString(t)
 		options := PolicyCreateOptions{
 			Name:        String(name),
@@ -112,7 +135,104 @@ func TestPoliciesCreate(t *testing.T) {
 		} {
 			assert.NotEmpty(t, item.ID)
 			assert.Equal(t, *options.Name, item.Name)
+			assert.Equal(t, Sentinel, item.Kind)
 			assert.Equal(t, *options.Description, item.Description)
+		}
+	})
+
+	t.Run("with valid options - Sentinel", func(t *testing.T) {
+		name := randomString(t)
+		options := PolicyCreateOptions{
+			Name:        String(name),
+			Description: String("A sample policy"),
+			Kind:        Sentinel,
+			Enforce: []*EnforcementOptions{
+				{
+					Path: String(name + ".sentinel"),
+					Mode: EnforcementMode(EnforcementSoft),
+				},
+			},
+		}
+
+		p, err := client.Policies.Create(ctx, orgTest.Name, options)
+		require.NoError(t, err)
+
+		// Get a refreshed view from the API.
+		refreshed, err := client.Policies.Read(ctx, p.ID)
+		require.NoError(t, err)
+
+		for _, item := range []*Policy{
+			p,
+			refreshed,
+		} {
+			assert.NotEmpty(t, item.ID)
+			assert.Equal(t, *options.Name, item.Name)
+			assert.Equal(t, options.Kind, item.Kind)
+			assert.Nil(t, options.Query)
+			assert.Equal(t, *options.Description, item.Description)
+		}
+	})
+
+	t.Run("with valid options - OPA", func(t *testing.T) {
+		name := randomString(t)
+		options := PolicyCreateOptions{
+			Name:        String(name),
+			Description: String("A sample policy"),
+			Kind:        OPA,
+			Query:       String("terraform.main"),
+			Enforce: []*EnforcementOptions{
+				{
+					Path: String(name + ".rego"),
+					Mode: EnforcementMode(EnforcementMandatory),
+				},
+			},
+		}
+
+		p, err := client.Policies.Create(ctx, orgTest.Name, options)
+		require.NoError(t, err)
+
+		// Get a refreshed view from the API.
+		refreshed, err := client.Policies.Read(ctx, p.ID)
+		require.NoError(t, err)
+
+		for _, item := range []*Policy{
+			p,
+			refreshed,
+		} {
+			assert.NotEmpty(t, item.ID)
+			assert.Equal(t, *options.Name, item.Name)
+			assert.Equal(t, options.Kind, item.Kind)
+			assert.Equal(t, *options.Query, *item.Query)
+			assert.Equal(t, *options.Description, item.Description)
+		}
+	})
+
+	t.Run("with valid options - Enforcement Level", func(t *testing.T) {
+		name := randomString(t)
+		options := PolicyCreateOptions{
+			Name:             String(name),
+			Description:      String("A sample policy"),
+			Kind:             Sentinel,
+			EnforcementLevel: EnforcementMode(EnforcementHard),
+		}
+
+		p, err := client.Policies.Create(ctx, orgTest.Name, options)
+		require.NoError(t, err)
+
+		// Get a refreshed view from the API.
+		refreshed, err := client.Policies.Read(ctx, p.ID)
+		require.NoError(t, err)
+
+		for _, item := range []*Policy{
+			p,
+			refreshed,
+		} {
+			assert.NotEmpty(t, item.ID)
+			assert.Equal(t, *options.Name, item.Name)
+			assert.Equal(t, options.Kind, item.Kind)
+			assert.Nil(t, options.Query)
+			assert.Equal(t, *options.Description, item.Description)
+			assert.Equal(t, *options.EnforcementLevel, item.EnforcementLevel)
 		}
 	})
 
@@ -123,6 +243,22 @@ func TestPoliciesCreate(t *testing.T) {
 				{
 					Path: String(badIdentifier + ".sentinel"),
 					Mode: EnforcementMode(EnforcementSoft),
+				},
+			},
+		})
+		assert.Nil(t, p)
+		assert.EqualError(t, err, ErrInvalidName.Error())
+	})
+
+	t.Run("when options has an invalid name - OPA", func(t *testing.T) {
+		p, err := client.Policies.Create(ctx, orgTest.Name, PolicyCreateOptions{
+			Name:  String(badIdentifier),
+			Kind:  OPA,
+			Query: String("terraform.main"),
+			Enforce: []*EnforcementOptions{
+				{
+					Path: String(badIdentifier + ".rego"),
+					Mode: EnforcementMode(EnforcementAdvisory),
 				},
 			},
 		})
@@ -143,7 +279,50 @@ func TestPoliciesCreate(t *testing.T) {
 		assert.EqualError(t, err, ErrRequiredName.Error())
 	})
 
-	t.Run("when options is missing an enforcement", func(t *testing.T) {
+	t.Run("when options is missing name - OPA", func(t *testing.T) {
+		p, err := client.Policies.Create(ctx, orgTest.Name, PolicyCreateOptions{
+			Kind:  OPA,
+			Query: String("terraform.main"),
+			Enforce: []*EnforcementOptions{
+				{
+					Path: String(randomString(t) + ".rego"),
+					Mode: EnforcementMode(EnforcementSoft),
+				},
+			},
+		})
+		assert.Nil(t, p)
+		assert.EqualError(t, err, ErrRequiredName.Error())
+	})
+
+	t.Run("when options is missing query - OPA", func(t *testing.T) {
+		name := randomString(t)
+		p, err := client.Policies.Create(ctx, orgTest.Name, PolicyCreateOptions{
+			Name: String(name),
+			Kind: OPA,
+			Enforce: []*EnforcementOptions{
+				{
+					Path: String(randomString(t) + ".rego"),
+					Mode: EnforcementMode(EnforcementSoft),
+				},
+			},
+		})
+		assert.Nil(t, p)
+		assert.Equal(t, err, ErrRequiredQuery)
+	})
+
+	t.Run("when options is missing an enforcement-OPA", func(t *testing.T) {
+		options := PolicyCreateOptions{
+			Name:  String(randomString(t)),
+			Kind:  OPA,
+			Query: String("terraform.main"),
+		}
+
+		p, err := client.Policies.Create(ctx, orgTest.Name, options)
+		assert.Nil(t, p)
+		assert.Equal(t, err, ErrRequiredEnforce)
+	})
+
+	t.Run("when options is missing an enforcement-Sentinel", func(t *testing.T) {
 		options := PolicyCreateOptions{
 			Name: String(randomString(t)),
 		}
@@ -153,9 +332,26 @@ func TestPoliciesCreate(t *testing.T) {
 		assert.Equal(t, err, ErrRequiredEnforce)
 	})
 
-	t.Run("when options is missing enforcement path", func(t *testing.T) {
+	t.Run("when options is missing enforcement path-Sentinel", func(t *testing.T) {
 		options := PolicyCreateOptions{
 			Name: String(randomString(t)),
+			Enforce: []*EnforcementOptions{
+				{
+					Mode: EnforcementMode(EnforcementSoft),
+				},
+			},
+		}
+
+		p, err := client.Policies.Create(ctx, orgTest.Name, options)
+		assert.Nil(t, p)
+		assert.Equal(t, err, ErrRequiredEnforcementPath)
+	})
+
+	t.Run("when options is missing enforcement path-OPA", func(t *testing.T) {
+		options := PolicyCreateOptions{
+			Name:  String(randomString(t)),
+			Kind:  OPA,
+			Query: String("terraform.main"),
 			Enforce: []*EnforcementOptions{
 				{
 					Mode: EnforcementMode(EnforcementSoft),
@@ -184,6 +380,42 @@ func TestPoliciesCreate(t *testing.T) {
 		assert.Equal(t, err, ErrRequiredEnforcementMode)
 	})
 
+	t.Run("when options is missing enforcement mode-OPA", func(t *testing.T) {
+		name := randomString(t)
+		options := PolicyCreateOptions{
+			Name:  String(name),
+			Kind:  OPA,
+			Query: String("terraform.main"),
+			Enforce: []*EnforcementOptions{
+				{
+					Path: String(name + ".sentinel"),
+				},
+			},
+		}
+
+		p, err := client.Policies.Create(ctx, orgTest.Name, options)
+		assert.Nil(t, p)
+		assert.Equal(t, err, ErrRequiredEnforcementMode)
+	})
+
+	t.Run("when options is have both enforcement level and enforcement path", func(t *testing.T) {
+		name := randomString(t)
+		options := PolicyCreateOptions{
+			Name: String(name),
+			Enforce: []*EnforcementOptions{
+				{
+					Path: String(randomString(t) + ".sentinel"),
+					Mode: EnforcementMode(EnforcementSoft),
+				},
+			},
+			EnforcementLevel: EnforcementMode(EnforcementMandatory),
+		}
+
+		p, err := client.Policies.Create(ctx, orgTest.Name, options)
+		assert.Nil(t, p)
+		assert.Equal(t, err, ErrConflictingEnforceEnforcementLevel)
+	})
+
 	t.Run("when options has an invalid organization", func(t *testing.T) {
 		p, err := client.Policies.Create(ctx, badIdentifier, PolicyCreateOptions{
 			Name: String("foo"),
@@ -194,8 +426,6 @@ func TestPoliciesCreate(t *testing.T) {
 }
 
 func TestPoliciesRead(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -213,6 +443,7 @@ func TestPoliciesRead(t *testing.T) {
 		assert.Equal(t, pTest.Name, p.Name)
 		assert.Equal(t, pTest.PolicySetCount, p.PolicySetCount)
 		assert.Empty(t, p.Enforce)
+		assert.Equal(t, p.EnforcementLevel, pTest.EnforcementLevel)
 		assert.Equal(t, pTest.Organization.Name, p.Organization.Name)
 	})
 
@@ -230,6 +461,7 @@ func TestPoliciesRead(t *testing.T) {
 		assert.NotEmpty(t, p.Enforce)
 		assert.NotEmpty(t, p.Enforce[0].Path)
 		assert.NotEmpty(t, p.Enforce[0].Mode)
+		assert.Equal(t, p.EnforcementLevel, pTest.EnforcementLevel)
 		assert.Equal(t, pTest.Organization.Name, p.Organization.Name)
 	})
 
@@ -247,8 +479,6 @@ func TestPoliciesRead(t *testing.T) {
 }
 
 func TestPoliciesUpdate(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -323,6 +553,66 @@ func TestPoliciesUpdate(t *testing.T) {
 		assert.Equal(t, "A brand new description", pAfter.Description)
 	})
 
+	t.Run("with a new query", func(t *testing.T) {
+		options := PolicyCreateOptions{
+			Description: String("A sample OPA policy"),
+			Kind:        OPA,
+			Query:       String("data.example.rule"),
+			Enforce: []*EnforcementOptions{
+				{
+					Mode: EnforcementMode(EnforcementMandatory),
+				},
+			},
+		}
+		pBefore, pBeforeCleanup := createUploadedPolicyWithOptions(t, client, true, orgTest, options)
+		defer pBeforeCleanup()
+
+		pAfter, err := client.Policies.Update(ctx, pBefore.ID, PolicyUpdateOptions{
+			Query: String("terraform.policy1.deny"),
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, pBefore.Name, pAfter.Name)
+		assert.Equal(t, pBefore.Enforce, pAfter.Enforce)
+		assert.NotEqual(t, *pBefore.Query, *pAfter.Query)
+		assert.Equal(t, "terraform.policy1.deny", *pAfter.Query)
+	})
+
+	t.Run("with a new enforcement level", func(t *testing.T) {
+		options := PolicyCreateOptions{
+			Description:      String("A sample OPA policy"),
+			Kind:             OPA,
+			Query:            String("data.example.rule"),
+			EnforcementLevel: EnforcementMode(EnforcementMandatory),
+		}
+		pBefore, pBeforeCleanup := createUploadedPolicyWithOptions(t, client, true, orgTest, options)
+		defer pBeforeCleanup()
+
+		pAfter, err := client.Policies.Update(ctx, pBefore.ID, PolicyUpdateOptions{
+			EnforcementLevel: EnforcementMode(EnforcementAdvisory),
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, pBefore.Name, pAfter.Name)
+		assert.Equal(t, pBefore.EnforcementLevel, EnforcementMandatory)
+		assert.Equal(t, pAfter.EnforcementLevel, EnforcementAdvisory)
+	})
+
+	t.Run("update query when kind is not OPA", func(t *testing.T) {
+		pBefore, pBeforeCleanup := createUploadedPolicy(t, client, true, orgTest)
+		defer pBeforeCleanup()
+
+		pAfter, err := client.Policies.Update(ctx, pBefore.ID, PolicyUpdateOptions{
+			Query: String("terraform.policy1.deny"),
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, pBefore.Name, pAfter.Name)
+		assert.Equal(t, pBefore.Enforce, pAfter.Enforce)
+		assert.Equal(t, Sentinel, pAfter.Kind)
+		assert.Nil(t, pAfter.Query)
+	})
+
 	t.Run("without a valid policy ID", func(t *testing.T) {
 		p, err := client.Policies.Update(ctx, badIdentifier, PolicyUpdateOptions{})
 		assert.Nil(t, p)
@@ -331,8 +621,6 @@ func TestPoliciesUpdate(t *testing.T) {
 }
 
 func TestPoliciesDelete(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -362,8 +650,6 @@ func TestPoliciesDelete(t *testing.T) {
 }
 
 func TestPoliciesUpload(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -372,17 +658,17 @@ func TestPoliciesUpload(t *testing.T) {
 
 	t.Run("with valid options", func(t *testing.T) {
 		err := client.Policies.Upload(ctx, pTest.ID, []byte(`main = rule { true }`))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("with empty content", func(t *testing.T) {
 		err := client.Policies.Upload(ctx, pTest.ID, []byte{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("without any content", func(t *testing.T) {
 		err := client.Policies.Upload(ctx, pTest.ID, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("without a valid policy ID", func(t *testing.T) {
@@ -392,8 +678,6 @@ func TestPoliciesUpload(t *testing.T) {
 }
 
 func TestPoliciesDownload(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -413,7 +697,7 @@ func TestPoliciesDownload(t *testing.T) {
 		require.NoError(t, err)
 
 		content, err := client.Policies.Download(ctx, pTest.ID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, testContent, content)
 	})
 

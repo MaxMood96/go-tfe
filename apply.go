@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -14,7 +17,7 @@ var _ Applies = (*applies)(nil)
 // Applies describes all the apply related methods that the Terraform
 // Enterprise API supports.
 //
-// TFE API docs: https://www.terraform.io/docs/cloud/api/applies.html
+// TFE API docs: https://developer.hashicorp.com/terraform/cloud-docs/api-docs/applies
 type Applies interface {
 	// Read an apply by its ID.
 	Read(ctx context.Context, applyID string) (*Apply, error)
@@ -51,6 +54,7 @@ type Apply struct {
 	ResourceAdditions    int                    `jsonapi:"attr,resource-additions"`
 	ResourceChanges      int                    `jsonapi:"attr,resource-changes"`
 	ResourceDestructions int                    `jsonapi:"attr,resource-destructions"`
+	ResourceImports      int                    `jsonapi:"attr,resource-imports"`
 	Status               ApplyStatus            `jsonapi:"attr,status"`
 	StatusTimestamps     *ApplyStatusTimestamps `jsonapi:"attr,status-timestamps"`
 }
@@ -71,14 +75,14 @@ func (s *applies) Read(ctx context.Context, applyID string) (*Apply, error) {
 		return nil, ErrInvalidApplyID
 	}
 
-	u := fmt.Sprintf("applies/%s", url.QueryEscape(applyID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("applies/%s", url.PathEscape(applyID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	a := &Apply{}
-	err = s.client.do(ctx, req, a)
+	err = req.Do(ctx, a)
 	if err != nil {
 		return nil, err
 	}

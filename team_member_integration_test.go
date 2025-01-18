@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -16,10 +16,8 @@ func TestTeamMembersList(t *testing.T) {
 	// but this test uses extra functionality that is only available
 	// to paid accounts. Organizations under a free account can
 	// create team tokens, but they only have access to one team: the
-	// owners team. This teste creates new teams, and that feature is
+	// owners team. This test creates new teams, and that feature is
 	// unavaiable to paid accounts.
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -58,8 +56,6 @@ func TestTeamMembersList(t *testing.T) {
 }
 
 func TestTeamMembersAddWithInvalidOptions(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -102,8 +98,6 @@ func TestTeamMembersAddWithInvalidOptions(t *testing.T) {
 }
 
 func TestTeamMembersAddByUsername(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -136,8 +130,6 @@ func TestTeamMembersAddByUsername(t *testing.T) {
 }
 
 func TestTeamMembersAddByOrganizationMembers(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -174,8 +166,6 @@ func TestTeamMembersAddByOrganizationMembers(t *testing.T) {
 }
 
 func TestTeamMembersRemoveWithInvalidOptions(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -218,8 +208,6 @@ func TestTeamMembersRemoveWithInvalidOptions(t *testing.T) {
 }
 
 func TestTeamMembersRemoveByUsernames(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -240,13 +228,11 @@ func TestTeamMembersRemoveByUsernames(t *testing.T) {
 		}
 
 		err := client.TeamMembers.Remove(ctx, tmTest.ID, options)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 }
 
 func TestTeamMembersRemoveByOrganizationMemberships(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -271,6 +257,6 @@ func TestTeamMembersRemoveByOrganizationMemberships(t *testing.T) {
 		}
 
 		err := client.TeamMembers.Remove(ctx, tmTest.ID, options)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 }

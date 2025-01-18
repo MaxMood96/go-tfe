@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -13,7 +16,7 @@ var _ PolicySetVersions = (*policySetVersions)(nil)
 // PolicySetVersions describes all the Policy Set Version related methods that the Terraform
 // Enterprise API supports.
 //
-// TFE API docs: https://www.terraform.io/docs/cloud/api/policy-sets.html#create-a-policy-set-version
+// TFE API docs: https://developer.hashicorp.com/terraform/cloud-docs/api-docs/policy-sets#create-a-policy-set-version
 type PolicySetVersions interface {
 	// Create is used to create a new Policy Set Version.
 	Create(ctx context.Context, policySetID string) (*PolicySetVersion, error)
@@ -101,14 +104,14 @@ func (p *policySetVersions) Create(ctx context.Context, policySetID string) (*Po
 		return nil, ErrInvalidPolicySetID
 	}
 
-	u := fmt.Sprintf("policy-sets/%s/versions", url.QueryEscape(policySetID))
-	req, err := p.client.newRequest("POST", u, nil)
+	u := fmt.Sprintf("policy-sets/%s/versions", url.PathEscape(policySetID))
+	req, err := p.client.NewRequest("POST", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	psv := &PolicySetVersion{}
-	err = p.client.do(ctx, req, psv)
+	err = req.Do(ctx, psv)
 	if err != nil {
 		return nil, err
 	}
@@ -122,14 +125,14 @@ func (p *policySetVersions) Read(ctx context.Context, policySetVersionID string)
 		return nil, ErrInvalidPolicySetID
 	}
 
-	u := fmt.Sprintf("policy-set-versions/%s", url.QueryEscape(policySetVersionID))
-	req, err := p.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("policy-set-versions/%s", url.PathEscape(policySetVersionID))
+	req, err := p.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	psv := &PolicySetVersion{}
-	err = p.client.do(ctx, req, psv)
+	err = req.Do(ctx, psv)
 	if err != nil {
 		return nil, err
 	}
@@ -151,10 +154,5 @@ func (p *policySetVersions) Upload(ctx context.Context, psv PolicySetVersion, pa
 		return err
 	}
 
-	req, err := p.client.newRequest("PUT", uploadURL, body)
-	if err != nil {
-		return err
-	}
-
-	return p.client.do(ctx, req, nil)
+	return p.client.doForeignPUTRequest(ctx, uploadURL, body)
 }

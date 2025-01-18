@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -13,7 +16,7 @@ var _ Comments = (*comments)(nil)
 // Terraform Enterprise API supports.
 //
 // TFE API docs:
-// https://www.terraform.io/docs/cloud/api/comments.html
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/comments
 type Comments interface {
 	// List all comments of the given run.
 	List(ctx context.Context, runID string) (*CommentList, error)
@@ -59,14 +62,14 @@ func (s *comments) List(ctx context.Context, runID string) (*CommentList, error)
 		return nil, ErrInvalidRunID
 	}
 
-	u := fmt.Sprintf("runs/%s/comments", url.QueryEscape(runID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("runs/%s/comments", url.PathEscape(runID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	cl := &CommentList{}
-	err = s.client.do(ctx, req, cl)
+	err = req.Do(ctx, cl)
 	if err != nil {
 		return nil, err
 	}
@@ -84,14 +87,14 @@ func (s *comments) Create(ctx context.Context, runID string, options CommentCrea
 		return nil, ErrInvalidRunID
 	}
 
-	u := fmt.Sprintf("runs/%s/comments", url.QueryEscape(runID))
-	req, err := s.client.newRequest("POST", u, &options)
+	u := fmt.Sprintf("runs/%s/comments", url.PathEscape(runID))
+	req, err := s.client.NewRequest("POST", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	comm := &Comment{}
-	err = s.client.do(ctx, req, comm)
+	err = req.Do(ctx, comm)
 	if err != nil {
 		return nil, err
 	}
@@ -105,14 +108,14 @@ func (s *comments) Read(ctx context.Context, commentID string) (*Comment, error)
 		return nil, ErrInvalidCommentID
 	}
 
-	u := fmt.Sprintf("comments/%s", url.QueryEscape(commentID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("comments/%s", url.PathEscape(commentID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	comm := &Comment{}
-	err = s.client.do(ctx, req, comm)
+	err = req.Do(ctx, comm)
 	if err != nil {
 		return nil, err
 	}

@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -7,7 +7,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
+	"reflect"
 	"testing"
 	"time"
 
@@ -16,8 +17,6 @@ import (
 )
 
 func TestPolicyChecksList(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -30,7 +29,7 @@ func TestPolicyChecksList(t *testing.T) {
 	defer policyCleanup2()
 	wTest, wsCleanup := createWorkspace(t, client, orgTest)
 	defer wsCleanup()
-	createPolicySet(t, client, orgTest, []*Policy{pTest1, pTest2}, []*Workspace{wTest})
+	createPolicySet(t, client, orgTest, []*Policy{pTest1, pTest2}, []*Workspace{wTest}, nil, nil, "")
 
 	rTest, runCleanup := createPolicyCheckedRun(t, client, wTest)
 	defer runCleanup()
@@ -68,6 +67,9 @@ func TestPolicyChecksList(t *testing.T) {
 			Include: []PolicyCheckIncludeOpt{PolicyCheckRun},
 		})
 		require.NoError(t, err)
+		require.NotEmpty(t, pcl.Items)
+		require.NotNil(t, pcl.Items[0])
+		require.NotNil(t, pcl.Items[0].Run)
 		assert.NotEmpty(t, pcl.Items[0].Run.Status)
 	})
 
@@ -79,9 +81,6 @@ func TestPolicyChecksList(t *testing.T) {
 }
 
 func TestPolicyChecksRead(t *testing.T) {
-	skipIfEnterprise(t)
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -90,7 +89,7 @@ func TestPolicyChecksRead(t *testing.T) {
 
 	pTest, _ := createUploadedPolicy(t, client, true, orgTest)
 	wTest, _ := createWorkspace(t, client, orgTest)
-	createPolicySet(t, client, orgTest, []*Policy{pTest}, []*Workspace{wTest})
+	createPolicySet(t, client, orgTest, []*Policy{pTest}, []*Workspace{wTest}, nil, nil, "")
 
 	rTest, _ := createPolicyCheckedRun(t, client, wTest)
 	require.Equal(t, 1, len(rTest.PolicyChecks))
@@ -106,6 +105,11 @@ func TestPolicyChecksRead(t *testing.T) {
 		assert.NotEmpty(t, pc.StatusTimestamps)
 		assert.Equal(t, 1, pc.Result.Passed)
 		assert.NotEmpty(t, pc.Run)
+		assert.NotEmpty(t, pc.Result.Sentinel)
+
+		if reflect.TypeOf(pc.Result.Sentinel) != reflect.TypeOf(map[string]interface{}{}) {
+			assert.Fail(t, "Sentinel is not a map[string]interface{}")
+		}
 	})
 
 	t.Run("when the policy check does not exist", func(t *testing.T) {
@@ -122,8 +126,6 @@ func TestPolicyChecksRead(t *testing.T) {
 }
 
 func TestPolicyChecksOverride(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -136,7 +138,7 @@ func TestPolicyChecksOverride(t *testing.T) {
 
 		wTest, wTestCleanup := createWorkspace(t, client, orgTest)
 		defer wTestCleanup()
-		createPolicySet(t, client, orgTest, []*Policy{pTest}, []*Workspace{wTest})
+		createPolicySet(t, client, orgTest, []*Policy{pTest}, []*Workspace{wTest}, nil, nil, "")
 		rTest, tTestCleanup := createPolicyCheckedRun(t, client, wTest)
 		defer tTestCleanup()
 
@@ -161,7 +163,7 @@ func TestPolicyChecksOverride(t *testing.T) {
 
 		wTest, wTestCleanup := createWorkspace(t, client, orgTest)
 		defer wTestCleanup()
-		createPolicySet(t, client, orgTest, []*Policy{pTest}, []*Workspace{wTest})
+		createPolicySet(t, client, orgTest, []*Policy{pTest}, []*Workspace{wTest}, nil, nil, "")
 		rTest, rTestCleanup := createPolicyCheckedRun(t, client, wTest)
 		defer rTestCleanup()
 
@@ -182,8 +184,6 @@ func TestPolicyChecksOverride(t *testing.T) {
 }
 
 func TestPolicyChecksLogs(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -194,7 +194,7 @@ func TestPolicyChecksLogs(t *testing.T) {
 	defer pTestCleanup()
 	wTest, wTestCleanup := createWorkspace(t, client, orgTest)
 	defer wTestCleanup()
-	createPolicySet(t, client, orgTest, []*Policy{pTest}, []*Workspace{wTest})
+	createPolicySet(t, client, orgTest, []*Policy{pTest}, []*Workspace{wTest}, nil, nil, "")
 
 	rTest, rTestCleanup := createPolicyCheckedRun(t, client, wTest)
 	defer rTestCleanup()
@@ -207,7 +207,7 @@ func TestPolicyChecksLogs(t *testing.T) {
 		logReader, err := client.PolicyChecks.Logs(ctx, pc.ID)
 		require.NoError(t, err)
 
-		logs, err := ioutil.ReadAll(logReader)
+		logs, err := io.ReadAll(logReader)
 		require.NoError(t, err)
 
 		assert.Contains(t, string(logs), "1 policies evaluated")

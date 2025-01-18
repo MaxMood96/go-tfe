@@ -1,0 +1,49 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+name: Lint
+description: Lints go-tfe
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
+      with:
+        go-version-file: go.mod
+        cache: true
+
+    - run: make fmtcheck
+      shell: bash
+
+    - name: Install golangci-lint
+      run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/0b5709648c8ba9780e821faf16c5c2bb3262ce3e/install.sh | sh -s -- -b $(go env GOPATH)/bin $GOLANGCILINT_VERSION
+      shell: bash
+      env:
+        GOLANGCILINT_VERSION: v1.52.2
+
+    - run: make lint
+      shell: bash
+
+    - name: Ensure generate_mocks.sh ends in a newline
+      run: test "" = "$(tail -c1 "generate_mocks.sh")"
+      shell: bash
+
+    - name: Install mockgen
+      shell: bash
+      run: go install go.uber.org/mock/mockgen@v0.4.0
+
+    - name: Get dependencies
+      shell: bash
+      run: go mod download
+
+    - name: Generate mocks
+      shell: bash
+      run:  ./generate_mocks.sh
+
+    - name: verify go.mod and go.sum are consistent
+      shell: bash
+      run : go mod tidy
+
+    - name: Ensure mocks are generated
+      shell: bash
+      run: git diff --exit-code

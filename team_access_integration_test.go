@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -12,8 +12,6 @@ import (
 )
 
 func TestTeamAccessesList(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -90,8 +88,6 @@ func TestTeamAccessesList(t *testing.T) {
 }
 
 func TestTeamAccessesAdd(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -222,8 +218,6 @@ func TestTeamAccessesAdd(t *testing.T) {
 }
 
 func TestTeamAccessesRead(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -274,8 +268,6 @@ func TestTeamAccessesRead(t *testing.T) {
 }
 
 func TestTeamAccessesUpdate(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -306,8 +298,6 @@ func TestTeamAccessesUpdate(t *testing.T) {
 }
 
 func TestTeamAccessesRemove(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -336,5 +326,67 @@ func TestTeamAccessesRemove(t *testing.T) {
 	t.Run("when the team access ID is invalid", func(t *testing.T) {
 		err := client.TeamAccess.Remove(ctx, badIdentifier)
 		assert.Equal(t, err, ErrInvalidAccessTeamID)
+	})
+}
+
+func TestTeamAccessesReadRunTasks(t *testing.T) {
+	skipUnlessBeta(t)
+	skipIfEnterprise(t)
+
+	client := testClient(t)
+	ctx := context.Background()
+
+	orgTest, orgTestCleanup := createOrganization(t, client)
+	defer orgTestCleanup()
+	wTest, wTestCleanup := createWorkspace(t, client, orgTest)
+	defer wTestCleanup()
+	tmTest, tmTestCleanup := createTeam(t, client, orgTest)
+	defer tmTestCleanup()
+
+	taTest, taTestCleanup := createTeamAccess(t, client, tmTest, wTest, orgTest)
+	defer taTestCleanup()
+
+	t.Run("when the team access exists", func(t *testing.T) {
+		ta, err := client.TeamAccess.Read(ctx, taTest.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, AccessAdmin, ta.Access)
+
+		t.Run("permission attributes are decoded", func(t *testing.T) {
+			assert.Equal(t, true, ta.RunTasks)
+		})
+	})
+}
+
+func TestTeamAccessesUpdateRunTasks(t *testing.T) {
+	skipUnlessBeta(t)
+
+	client := testClient(t)
+	ctx := context.Background()
+
+	orgTest, orgTestCleanup := createOrganization(t, client)
+	defer orgTestCleanup()
+
+	wTest, wTestCleanup := createWorkspace(t, client, orgTest)
+	defer wTestCleanup()
+
+	tmTest, tmTestCleanup := createTeam(t, client, orgTest)
+	defer tmTestCleanup()
+
+	taTest, taTestCleanup := createTeamAccess(t, client, tmTest, wTest, orgTest)
+	defer taTestCleanup()
+
+	t.Run("with valid attributes", func(t *testing.T) {
+		newAccess := !taTest.RunTasks
+		options := TeamAccessUpdateOptions{
+			Access:   Access(AccessCustom),
+			RunTasks: &newAccess,
+		}
+
+		ta, err := client.TeamAccess.Update(ctx, taTest.ID, options)
+		require.NoError(t, err)
+
+		assert.Equal(t, AccessCustom, ta.Access)
+		assert.Equal(t, newAccess, ta.RunTasks)
 	})
 }

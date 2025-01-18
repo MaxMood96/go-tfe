@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -15,12 +15,10 @@ import (
 const waitForPolicySetVersionUpload = 500 * time.Millisecond
 
 func TestPolicySetVersionsCreate(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
-	psTest, psTestCleanup := createPolicySet(t, client, nil, nil, nil)
+	psTest, psTestCleanup := createPolicySet(t, client, nil, nil, nil, nil, nil, "")
 	defer psTestCleanup()
 
 	t.Run("with valid identifier", func(t *testing.T) {
@@ -39,12 +37,10 @@ func TestPolicySetVersionsCreate(t *testing.T) {
 }
 
 func TestPolicySetVersionsRead(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
-	psTest, psTestCleanup := createPolicySet(t, client, nil, nil, nil)
+	psTest, psTestCleanup := createPolicySet(t, client, nil, nil, nil, nil, nil, "")
 	defer psTestCleanup()
 
 	origPSV, err := client.PolicySetVersions.Create(ctx, psTest.ID)
@@ -65,8 +61,6 @@ func TestPolicySetVersionsRead(t *testing.T) {
 }
 
 func TestPolicySetVersionsUpload(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -85,8 +79,8 @@ func TestPolicySetVersionsUpload(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		// give TFC soe time to process uploading the
-		// policy set version before reaeding..
+		// give HCP Terraform some time to process uploading the
+		// policy set version before reading.
 		time.Sleep(waitForPolicySetVersionUpload)
 
 		psv, err = client.PolicySetVersions.Read(ctx, psv.ID)

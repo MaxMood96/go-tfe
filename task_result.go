@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -9,8 +12,7 @@ import (
 // Compile-time proof of interface implementation
 var _ TaskResults = (*taskResults)(nil)
 
-// TaskResults describes all the task result related methods that the TFC/E API supports.
-// **Note**: This API is still in BETA and is subject to change
+// TaskResults describes all the task result related methods that the HCP Terraform or Terraform Enterprise API supports.
 type TaskResults interface {
 	// Read a task result by ID
 	Read(ctx context.Context, taskResultID string) (*TaskResult, error)
@@ -30,6 +32,7 @@ const (
 	TaskPending     TaskResultStatus = "pending"
 	TaskRunning     TaskResultStatus = "running"
 	TaskUnreachable TaskResultStatus = "unreachable"
+	TaskErrored     TaskResultStatus = "errored"
 )
 
 // TaskEnforcementLevel is an enum that describes the enforcement levels for a run task
@@ -49,7 +52,7 @@ type TaskResultStatusTimestamps struct {
 	PassedAt   time.Time `jsonapi:"attr,passed-at,rfc3339"`
 }
 
-// TaskResult represents the result of a TFC/E run task
+// TaskResult represents the result of a HCP Terraform or Terraform Enterprise run task
 type TaskResult struct {
 	ID                            string                     `jsonapi:"primary,task-results"`
 	Status                        TaskResultStatus           `jsonapi:"attr,status"`
@@ -75,13 +78,13 @@ func (t *taskResults) Read(ctx context.Context, taskResultID string) (*TaskResul
 	}
 
 	u := fmt.Sprintf("task-results/%s", taskResultID)
-	req, err := t.client.newRequest("GET", u, nil)
+	req, err := t.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	r := &TaskResult{}
-	err = t.client.do(ctx, req, r)
+	err = req.Do(ctx, r)
 	if err != nil {
 		return nil, err
 	}

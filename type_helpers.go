@@ -1,7 +1,56 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
+
+import (
+	"time"
+
+	"github.com/hashicorp/jsonapi"
+)
 
 // Access returns a pointer to the given team access type.
 func Access(v AccessType) *AccessType {
+	return &v
+}
+
+// ProjectAccess returns a pointer to the given team access project type.
+func ProjectAccess(v TeamProjectAccessType) *TeamProjectAccessType {
+	return &v
+}
+
+// ProjectSettingsPermission returns a pointer to the given team access project type.
+func ProjectSettingsPermission(v ProjectSettingsPermissionType) *ProjectSettingsPermissionType {
+	return &v
+}
+
+// ProjectTeamsPermission returns a pointer to the given team access project type.
+func ProjectTeamsPermission(v ProjectTeamsPermissionType) *ProjectTeamsPermissionType {
+	return &v
+}
+
+// ProjectVariableSetsPermission returns a pointer to the given team access project type.
+func ProjectVariableSetsPermission(v ProjectVariableSetsPermissionType) *ProjectVariableSetsPermissionType {
+	return &v
+}
+
+// WorkspaceRunsPermission returns a pointer to the given team access project type.
+func WorkspaceRunsPermission(v WorkspaceRunsPermissionType) *WorkspaceRunsPermissionType {
+	return &v
+}
+
+// WorkspaceSentinelMocksPermission returns a pointer to the given team access project type.
+func WorkspaceSentinelMocksPermission(v WorkspaceSentinelMocksPermissionType) *WorkspaceSentinelMocksPermissionType {
+	return &v
+}
+
+// WorkspaceStateVersionsPermission returns a pointer to the given team access project type.
+func WorkspaceStateVersionsPermission(v WorkspaceStateVersionsPermissionType) *WorkspaceStateVersionsPermissionType {
+	return &v
+}
+
+// WorkspaceStateVersionsPermission returns a pointer to the given team access project type.
+func WorkspaceVariablesPermission(v WorkspaceVariablesPermissionType) *WorkspaceVariablesPermissionType {
 	return &v
 }
 
@@ -78,4 +127,20 @@ func SMTPAuthValue(v SMTPAuthType) *SMTPAuthType {
 // String returns a pointer to the given string.
 func String(v string) *string {
 	return &v
+}
+
+func NullableBool(v bool) jsonapi.NullableAttr[bool] {
+	return jsonapi.NewNullableAttrWithValue[bool](v)
+}
+
+func NullBool() jsonapi.NullableAttr[bool] {
+	return jsonapi.NewNullNullableAttr[bool]()
+}
+
+func NullableTime(v time.Time) jsonapi.NullableAttr[time.Time] {
+	return jsonapi.NewNullableAttrWithValue[time.Time](v)
+}
+
+func NullTime() jsonapi.NullableAttr[time.Time] {
+	return jsonapi.NewNullNullableAttr[time.Time]()
 }

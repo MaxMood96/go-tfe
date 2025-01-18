@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -11,10 +14,10 @@ import (
 var _ RunTriggers = (*runTriggers)(nil)
 
 // RunTriggers describes all the Run Trigger
-// related methods that the Terraform Cloud API supports.
+// related methods that the HCP Terraform API supports.
 //
 // TFE API docs:
-// https://www.terraform.io/docs/cloud/api/run-triggers.html
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/run-triggers
 type RunTriggers interface {
 	// List all the run triggers within a workspace.
 	List(ctx context.Context, workspaceID string, options *RunTriggerListOptions) (*RunTriggerList, error)
@@ -40,20 +43,26 @@ type RunTriggerList struct {
 	Items []*RunTrigger
 }
 
+// SourceableChoice is a choice type struct that represents the possible values
+// within a polymorphic relation. If a value is available, exactly one field
+// will be non-nil.
+type SourceableChoice struct {
+	Workspace *Workspace
+}
+
 // RunTrigger represents a run trigger.
 type RunTrigger struct {
 	ID             string    `jsonapi:"primary,run-triggers"`
 	CreatedAt      time.Time `jsonapi:"attr,created-at,iso8601"`
 	SourceableName string    `jsonapi:"attr,sourceable-name"`
 	WorkspaceName  string    `jsonapi:"attr,workspace-name"`
-
-	// Relations
-	// TODO: this will eventually need to be polymorphic
-	Sourceable *Workspace `jsonapi:"relation,sourceable"`
-	Workspace  *Workspace `jsonapi:"relation,workspace"`
+	// DEPRECATED. The sourceable field is polymorphic. Use SourceableChoice instead.
+	Sourceable       *Workspace        `jsonapi:"relation,sourceable"`
+	SourceableChoice *SourceableChoice `jsonapi:"polyrelation,sourceable"`
+	Workspace        *Workspace        `jsonapi:"relation,workspace"`
 }
 
-// https://www.terraform.io/cloud-docs/api-docs/run-triggers#query-parameters
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/run-triggers#query-parameters
 type RunTriggerFilterOp string
 
 const (
@@ -62,7 +71,7 @@ const (
 )
 
 // A list of relations to include
-// https://www.terraform.io/cloud-docs/api-docs/run-triggers#available-related-resources
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/run-triggers#available-related-resources
 type RunTriggerIncludeOpt string
 
 const (
@@ -100,16 +109,20 @@ func (s *runTriggers) List(ctx context.Context, workspaceID string, options *Run
 		return nil, err
 	}
 
-	u := fmt.Sprintf("workspaces/%s/run-triggers", url.QueryEscape(workspaceID))
-	req, err := s.client.newRequest("GET", u, options)
+	u := fmt.Sprintf("workspaces/%s/run-triggers", url.PathEscape(workspaceID))
+	req, err := s.client.NewRequest("GET", u, options)
 	if err != nil {
 		return nil, err
 	}
 
 	rtl := &RunTriggerList{}
-	err = s.client.do(ctx, req, rtl)
+	err = req.Do(ctx, rtl)
 	if err != nil {
 		return nil, err
+	}
+
+	for i := range rtl.Items {
+		backfillDeprecatedSourceable(rtl.Items[i])
 	}
 
 	return rtl, nil
@@ -124,17 +137,19 @@ func (s *runTriggers) Create(ctx context.Context, workspaceID string, options Ru
 		return nil, err
 	}
 
-	u := fmt.Sprintf("workspaces/%s/run-triggers", url.QueryEscape(workspaceID))
-	req, err := s.client.newRequest("POST", u, &options)
+	u := fmt.Sprintf("workspaces/%s/run-triggers", url.PathEscape(workspaceID))
+	req, err := s.client.NewRequest("POST", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	rt := &RunTrigger{}
-	err = s.client.do(ctx, req, rt)
+	err = req.Do(ctx, rt)
 	if err != nil {
 		return nil, err
 	}
+
+	backfillDeprecatedSourceable(rt)
 
 	return rt, nil
 }
@@ -145,17 +160,19 @@ func (s *runTriggers) Read(ctx context.Context, runTriggerID string) (*RunTrigge
 		return nil, ErrInvalidRunTriggerID
 	}
 
-	u := fmt.Sprintf("run-triggers/%s", url.QueryEscape(runTriggerID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("run-triggers/%s", url.PathEscape(runTriggerID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	rt := &RunTrigger{}
-	err = s.client.do(ctx, req, rt)
+	err = req.Do(ctx, rt)
 	if err != nil {
 		return nil, err
 	}
+
+	backfillDeprecatedSourceable(rt)
 
 	return rt, nil
 }
@@ -166,13 +183,13 @@ func (s *runTriggers) Delete(ctx context.Context, runTriggerID string) error {
 		return ErrInvalidRunTriggerID
 	}
 
-	u := fmt.Sprintf("run-triggers/%s", url.QueryEscape(runTriggerID))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("run-triggers/%s", url.PathEscape(runTriggerID))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 func (o RunTriggerCreateOptions) valid() error {
@@ -191,11 +208,15 @@ func (o *RunTriggerListOptions) valid() error {
 		return err
 	}
 
-	if err := validateRunTriggerIncludeParams(o.Include); err != nil {
-		return err
+	return nil
+}
+
+func backfillDeprecatedSourceable(runTrigger *RunTrigger) {
+	if runTrigger.Sourceable != nil || runTrigger.SourceableChoice == nil {
+		return
 	}
 
-	return nil
+	runTrigger.Sourceable = runTrigger.SourceableChoice.Workspace
 }
 
 func validateRunTriggerFilterParam(filterParam RunTriggerFilterOp, includeParams []RunTriggerIncludeOpt) error {
@@ -209,19 +230,6 @@ func validateRunTriggerFilterParam(filterParam RunTriggerFilterOp, includeParams
 	if len(includeParams) > 0 {
 		if filterParam != RunTriggerInbound {
 			return ErrUnsupportedRunTriggerType // if user passes RunTriggerOutbound the platform will not return any "include" data
-		}
-	}
-
-	return nil
-}
-
-func validateRunTriggerIncludeParams(params []RunTriggerIncludeOpt) error {
-	for _, p := range params {
-		switch p {
-		case RunTriggerWorkspace, RunTriggerSourceable:
-			// Do nothing
-		default:
-			return ErrInvalidIncludeValue
 		}
 	}
 

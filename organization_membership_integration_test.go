@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -53,7 +53,7 @@ func TestOrganizationMembershipsList(t *testing.T) {
 		assert.Empty(t, ml.Items)
 		assert.Equal(t, 999, ml.CurrentPage)
 
-		// Three because the creator of the organizaiton is a member, in addition to the two we added to setup the test.
+		// Three because the creator of the organization is a member, in addition to the two we added to setup the test.
 		assert.Equal(t, 3, ml.TotalCount)
 	})
 
@@ -70,6 +70,75 @@ func TestOrganizationMembershipsList(t *testing.T) {
 
 		assert.Contains(t, ml.Items, memTest1)
 		assert.Contains(t, ml.Items, memTest2)
+	})
+
+	t.Run("with email filter option", func(t *testing.T) {
+		_, memTest1Cleanup := createOrganizationMembership(t, client, orgTest)
+		defer memTest1Cleanup()
+		memTest2, memTest2Cleanup := createOrganizationMembership(t, client, orgTest)
+		defer memTest2Cleanup()
+
+		memTest3, memTest3Cleanup := createOrganizationMembership(t, client, orgTest)
+		defer memTest3Cleanup()
+
+		memTest2.User = &User{ID: memTest2.User.ID}
+		memTest3.User = &User{ID: memTest3.User.ID}
+
+		ml, err := client.OrganizationMemberships.List(ctx, orgTest.Name, &OrganizationMembershipListOptions{
+			Emails: []string{memTest2.Email, memTest3.Email},
+		})
+		require.NoError(t, err)
+
+		assert.Len(t, ml.Items, 2)
+		assert.Contains(t, ml.Items, memTest2)
+		assert.Contains(t, ml.Items, memTest3)
+
+		t.Run("with invalid email", func(t *testing.T) {
+			ml, err = client.OrganizationMemberships.List(ctx, orgTest.Name, &OrganizationMembershipListOptions{
+				Emails: []string{"foobar"},
+			})
+			assert.Equal(t, err, ErrInvalidEmail)
+		})
+	})
+
+	t.Run("with status filter option", func(t *testing.T) {
+		_, memTest1Cleanup := createOrganizationMembership(t, client, orgTest)
+		t.Cleanup(memTest1Cleanup)
+		_, memTest2Cleanup := createOrganizationMembership(t, client, orgTest)
+		t.Cleanup(memTest2Cleanup)
+
+		ml, err := client.OrganizationMemberships.List(ctx, orgTest.Name, &OrganizationMembershipListOptions{
+			Status: OrganizationMembershipInvited,
+		})
+		require.NoError(t, err)
+
+		require.Len(t, ml.Items, 2)
+		for _, member := range ml.Items {
+			assert.Equal(t, member.Status, OrganizationMembershipInvited)
+		}
+	})
+
+	t.Run("with search query string", func(t *testing.T) {
+		memTest1, memTest1Cleanup := createOrganizationMembership(t, client, orgTest)
+		t.Cleanup(memTest1Cleanup)
+		_, memTest2Cleanup := createOrganizationMembership(t, client, orgTest)
+		t.Cleanup(memTest2Cleanup)
+		_, memTest3Cleanup := createOrganizationMembership(t, client, orgTest)
+		t.Cleanup(memTest3Cleanup)
+
+		t.Run("using an email", func(t *testing.T) {
+			ml, err := client.OrganizationMemberships.List(ctx, orgTest.Name, &OrganizationMembershipListOptions{
+				Query: memTest1.Email,
+			})
+			require.NoError(t, err)
+
+			require.Len(t, ml.Items, 1)
+			assert.Equal(t, ml.Items[0].Email, memTest1.Email)
+		})
+
+		t.Run("using a user name", func(t *testing.T) {
+			t.Skip("Skipping, missing Account API support in order to set usernames")
+		})
 	})
 
 	t.Run("without a valid organization", func(t *testing.T) {
@@ -125,6 +194,38 @@ func TestOrganizationMembershipsCreate(t *testing.T) {
 
 		assert.Nil(t, mem)
 		assert.Error(t, err)
+	})
+
+	t.Run("with initial teams", func(t *testing.T) {
+		teamTest1, teamTestCleanup1 := createTeam(t, client, orgTest)
+		defer teamTestCleanup1()
+		teamTest2, teamTestCleanup2 := createTeam(t, client, orgTest)
+		defer teamTestCleanup2()
+
+		options := OrganizationMembershipCreateOptions{
+			Email: String(fmt.Sprintf("%s@tfe.local", randomString(t))),
+			Teams: []*Team{teamTest1, teamTest2},
+		}
+
+		mem, err := client.OrganizationMemberships.Create(ctx, orgTest.Name, options)
+		require.NoError(t, err)
+
+		// Verify that the user is now in the org
+		refreshed, err := client.OrganizationMemberships.ReadWithOptions(ctx, mem.ID, OrganizationMembershipReadOptions{
+			Include: []OrgMembershipIncludeOpt{OrgMembershipUser},
+		})
+		require.NoError(t, err)
+		assert.Equal(t, refreshed, mem)
+
+		// Verify that the user is in the teams
+		// Cant read from the teams, b/c the user is invited to them not a full member yet
+		require.Equal(t, len(refreshed.Teams), 2)
+		refreshedTeamIds := make([]string, 2)
+		refreshedTeamIds[0] = refreshed.Teams[0].ID
+		refreshedTeamIds[1] = refreshed.Teams[1].ID
+
+		assert.Contains(t, refreshedTeamIds, teamTest1.ID)
+		assert.Contains(t, refreshedTeamIds, teamTest2.ID)
 	})
 }
 
@@ -184,7 +285,7 @@ func TestOrganizationMembershipsReadWithOptions(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("without invalid include option", func(t *testing.T) {
+	t.Run("with invalid include option", func(t *testing.T) {
 		_, err := client.OrganizationMemberships.ReadWithOptions(ctx, memTest.ID, OrganizationMembershipReadOptions{
 			Include: []OrgMembershipIncludeOpt{"users"},
 		})

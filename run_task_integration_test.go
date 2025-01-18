@@ -1,10 +1,11 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
@@ -12,14 +13,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRunTasksCreate(t *testing.T) {
-	skipIfBeta(t)
+func hasGlobalRunTasks(client *Client, organizationName string) (bool, error) {
+	ctx := context.Background()
+	if orgEntitlements, err := client.Organizations.ReadEntitlements(ctx, organizationName); err != nil {
+		return false, err
+	} else if orgEntitlements == nil {
+		return false, errors.New("The organization entitlements are empty.")
+	} else {
+		return orgEntitlements.GlobalRunTasks, nil
+	}
+}
 
+func TestRunTasksCreate(t *testing.T) {
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
+
+	newSubscriptionUpdater(orgTest).WithBusinessPlan().Update(t)
+
+	if v, err := hasGlobalRunTasks(client, orgTest.Name); err != nil {
+		t.Fatalf("Could not retrieve the entitlements for the test organization.: %s", err)
+	} else if !v {
+		t.Fatal("The test organization requires the global-run-tasks entitlement but is not entitled.")
+		return
+	}
 
 	runTaskServerURL := os.Getenv("TFC_RUN_TASK_URL")
 	if runTaskServerURL == "" {
@@ -27,12 +46,26 @@ func TestRunTasksCreate(t *testing.T) {
 	}
 
 	runTaskName := "tst-runtask-" + randomString(t)
+	runTaskDescription := "A Run Task Description"
+	globalEnabled := true
+	globalStages := []Stage{
+		PostPlan,
+		PrePlan,
+	}
+	globalEnforce := Mandatory
 
 	t.Run("add run task to organization", func(t *testing.T) {
 		r, err := client.RunTasks.Create(ctx, orgTest.Name, RunTaskCreateOptions{
-			Name:     runTaskName,
-			URL:      runTaskServerURL,
-			Category: "task",
+			Name:        runTaskName,
+			URL:         runTaskServerURL,
+			Description: &runTaskDescription,
+			Category:    "task",
+			Enabled:     Bool(true),
+			Global: &GlobalRunTaskOptions{
+				Enabled:          &globalEnabled,
+				Stages:           &globalStages,
+				EnforcementLevel: &globalEnforce,
+			},
 		})
 		require.NoError(t, err)
 
@@ -40,6 +73,11 @@ func TestRunTasksCreate(t *testing.T) {
 		assert.Equal(t, r.Name, runTaskName)
 		assert.Equal(t, r.URL, runTaskServerURL)
 		assert.Equal(t, r.Category, "task")
+		assert.Equal(t, r.Description, runTaskDescription)
+		assert.NotNil(t, r.Global)
+		assert.Equal(t, globalEnabled, r.Global.Enabled)
+		assert.Equal(t, globalEnforce, r.Global.EnforcementLevel)
+		assert.Equal(t, globalStages, r.Global.Stages)
 
 		t.Run("ensure org is deserialized properly", func(t *testing.T) {
 			assert.Equal(t, r.Organization.Name, orgTest.Name)
@@ -47,14 +85,64 @@ func TestRunTasksCreate(t *testing.T) {
 	})
 }
 
-func TestRunTasksList(t *testing.T) {
-	skipIfBeta(t)
-
+func TestRunTasksCreateWithoutGlobalEntitlement(t *testing.T) {
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
+
+	newSubscriptionUpdater(orgTest).WithTrialPlan().Update(t)
+
+	if v, err := hasGlobalRunTasks(client, orgTest.Name); err != nil {
+		t.Fatalf("Could not retrieve the entitlements for the test organization.: %s", err)
+	} else if v {
+		t.Fatal("The test organization should not have the global-run-tasks entitlement but it does.")
+		return
+	}
+
+	runTaskServerURL := os.Getenv("TFC_RUN_TASK_URL")
+	if runTaskServerURL == "" {
+		t.Error("Cannot create a run task with an empty URL. You must set TFC_RUN_TASK_URL for run task related tests.")
+	}
+
+	runTaskName := "tst-runtask-" + randomString(t)
+	runTaskDescription := "A Run Task Description"
+	globalStages := []Stage{
+		PostPlan,
+		PrePlan,
+	}
+	globalEnforce := Mandatory
+
+	t.Run("add run task to organization", func(t *testing.T) {
+		r, err := client.RunTasks.Create(ctx, orgTest.Name, RunTaskCreateOptions{
+			Name:        runTaskName,
+			URL:         runTaskServerURL,
+			Description: &runTaskDescription,
+			Category:    "task",
+			// Even though we pass in these global parameters,
+			// they should be ignored and not throw an API error
+			Global: &GlobalRunTaskOptions{
+				Enabled:          Bool(true),
+				Stages:           &globalStages,
+				EnforcementLevel: &globalEnforce,
+			},
+		})
+		require.NoError(t, err)
+
+		assert.NotEmpty(t, r.ID)
+		assert.Nil(t, r.Global)
+	})
+}
+
+func TestRunTasksList(t *testing.T) {
+	client := testClient(t)
+	ctx := context.Background()
+
+	orgTest, orgTestCleanup := createOrganization(t, client)
+	defer orgTestCleanup()
+
+	upgradeOrganizationSubscription(t, client, orgTest)
 
 	_, runTaskTest1Cleanup := createRunTask(t, client, orgTest)
 	defer runTaskTest1Cleanup()
@@ -74,13 +162,13 @@ func TestRunTasksList(t *testing.T) {
 }
 
 func TestRunTasksRead(t *testing.T) {
-	skipIfBeta(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
+
+	upgradeOrganizationSubscription(t, client, orgTest)
 
 	runTaskTest, runTaskTestCleanup := createRunTask(t, client, orgTest)
 	defer runTaskTestCleanup()
@@ -92,7 +180,9 @@ func TestRunTasksRead(t *testing.T) {
 		assert.Equal(t, runTaskTest.ID, r.ID)
 		assert.Equal(t, runTaskTest.URL, r.URL)
 		assert.Equal(t, runTaskTest.Category, r.Category)
+		assert.Equal(t, runTaskTest.Description, r.Description)
 		assert.Equal(t, runTaskTest.HMACKey, r.HMACKey)
+		assert.Equal(t, runTaskTest.Enabled, r.Enabled)
 	})
 
 	t.Run("with options", func(t *testing.T) {
@@ -114,7 +204,7 @@ func TestRunTasksRead(t *testing.T) {
 
 		require.NoError(t, err)
 
-		assert.NotEmpty(t, r.WorkspaceRunTasks)
+		require.NotEmpty(t, r.WorkspaceRunTasks)
 		assert.NotEmpty(t, r.WorkspaceRunTasks[0].ID)
 		assert.NotEmpty(t, r.WorkspaceRunTasks[0].EnforcementLevel)
 		assert.NotEmpty(t, r.WorkspaceRunTasks[1].ID)
@@ -123,13 +213,13 @@ func TestRunTasksRead(t *testing.T) {
 }
 
 func TestRunTasksUpdate(t *testing.T) {
-	skipIfBeta(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
+
+	upgradeOrganizationSubscription(t, client, orgTest)
 
 	runTaskTest, runTaskTestCleanup := createRunTask(t, client, orgTest)
 	defer runTaskTestCleanup()
@@ -146,16 +236,42 @@ func TestRunTasksUpdate(t *testing.T) {
 
 		assert.Equal(t, rename, r.Name)
 	})
+
+	t.Run("toggle enabled", func(t *testing.T) {
+		runTaskTest.Enabled = !runTaskTest.Enabled
+		r, err := client.RunTasks.Update(ctx, runTaskTest.ID, RunTaskUpdateOptions{
+			Enabled: &runTaskTest.Enabled,
+		})
+		require.NoError(t, err)
+
+		r, err = client.RunTasks.Read(ctx, r.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, runTaskTest.Enabled, r.Enabled)
+	})
+
+	t.Run("update description", func(t *testing.T) {
+		newDescription := "An updated task description"
+		r, err := client.RunTasks.Update(ctx, runTaskTest.ID, RunTaskUpdateOptions{
+			Description: &newDescription,
+		})
+		require.NoError(t, err)
+
+		r, err = client.RunTasks.Read(ctx, r.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, newDescription, r.Description)
+	})
 }
 
 func TestRunTasksDelete(t *testing.T) {
-	skipIfBeta(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
+
+	upgradeOrganizationSubscription(t, client, orgTest)
 
 	runTaskTest, _ := createRunTask(t, client, orgTest)
 
@@ -179,13 +295,13 @@ func TestRunTasksDelete(t *testing.T) {
 }
 
 func TestRunTasksAttachToWorkspace(t *testing.T) {
-	skipIfBeta(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
+
+	upgradeOrganizationSubscription(t, client, orgTest)
 
 	runTaskTest, runTaskTestCleanup := createRunTask(t, client, orgTest)
 	defer runTaskTestCleanup()
@@ -195,6 +311,12 @@ func TestRunTasksAttachToWorkspace(t *testing.T) {
 
 	t.Run("to a valid workspace", func(t *testing.T) {
 		wr, err := client.RunTasks.AttachToWorkspace(ctx, wkspaceTest.ID, runTaskTest.ID, Advisory)
+
+		defer func() {
+			err = client.WorkspaceRunTasks.Delete(ctx, wkspaceTest.ID, wr.ID)
+			require.NoError(t, err)
+		}()
+
 		require.NoError(t, err)
 		require.NotNil(t, wr.ID)
 	})

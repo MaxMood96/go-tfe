@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -127,8 +127,11 @@ func TestRunTriggerList(t *testing.T) {
 			},
 		)
 		require.NoError(t, err)
-		assert.NotEmpty(t, rtl.Items)
-		assert.NotEmpty(t, rtl.Items[0].Sourceable.Name)
+		require.NotEmpty(t, rtl.Items)
+		require.NotNil(t, rtl.Items[0].Sourceable)
+		assert.NotEmpty(t, rtl.Items[0].Sourceable)
+		assert.NotNil(t, rtl.Items[0].SourceableChoice.Workspace)
+		assert.NotEmpty(t, rtl.Items[0].SourceableChoice.Workspace)
 	})
 
 	t.Run("with a RunTriggerType that does not return included data", func(t *testing.T) {

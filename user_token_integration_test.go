@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -78,6 +79,28 @@ func TestUserTokens_Create(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+
+	t.Run("create token without an expiration date", func(t *testing.T) {
+		token, err := client.UserTokens.Create(ctx, user.ID, UserTokenCreateOptions{})
+		tokens = append(tokens, token.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Empty(t, token.ExpiredAt)
+	})
+
+	t.Run("create token with an expiration date", func(t *testing.T) {
+		currentTime := time.Now().UTC().Truncate(time.Second)
+		oneDayLater := currentTime.Add(24 * time.Hour)
+		token, err := client.UserTokens.Create(ctx, user.ID, UserTokenCreateOptions{
+			ExpiredAt: &oneDayLater,
+		})
+		tokens = append(tokens, token.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, token.ExpiredAt, oneDayLater)
+	})
 }
 
 // TestUserTokens_Read tests basic creation of user tokens
@@ -101,6 +124,8 @@ func TestUserTokens_Read(t *testing.T) {
 		// object. Empty that out for comparison
 		token.Token = ""
 		assert.Equal(t, token, to)
+
+		requireExactlyOneNotEmpty(t, token.CreatedBy.Organization, token.CreatedBy.Team, token.CreatedBy.User)
 	})
 }
 

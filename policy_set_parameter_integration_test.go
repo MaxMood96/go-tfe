@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -12,15 +12,13 @@ import (
 )
 
 func TestPolicySetParametersList(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
 
-	psTest, pTestCleanup := createPolicySet(t, client, orgTest, nil, nil)
+	psTest, pTestCleanup := createPolicySet(t, client, orgTest, nil, nil, nil, nil, "")
 	defer pTestCleanup()
 
 	pTest1, pTestCleanup1 := createPolicySetParameter(t, client, psTest)
@@ -64,12 +62,10 @@ func TestPolicySetParametersList(t *testing.T) {
 }
 
 func TestPolicySetParametersCreate(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
-	psTest, psTestCleanup := createPolicySet(t, client, nil, nil, nil)
+	psTest, psTestCleanup := createPolicySet(t, client, nil, nil, nil, nil, nil, "")
 	defer psTestCleanup()
 
 	t.Run("with valid options", func(t *testing.T) {
@@ -166,8 +162,6 @@ func TestPolicySetParametersCreate(t *testing.T) {
 }
 
 func TestPolicySetParametersRead(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -205,8 +199,6 @@ func TestPolicySetParametersRead(t *testing.T) {
 }
 
 func TestPolicySetParametersUpdate(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
@@ -271,19 +263,17 @@ func TestPolicySetParametersUpdate(t *testing.T) {
 }
 
 func TestPolicySetParametersDelete(t *testing.T) {
-	skipIfFreeOnly(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
-	psTest, psTestCleanup := createPolicySet(t, client, nil, nil, nil)
+	psTest, psTestCleanup := createPolicySet(t, client, nil, nil, nil, nil, nil, "")
 	defer psTestCleanup()
 
 	pTest, _ := createPolicySetParameter(t, client, psTest)
 
 	t.Run("with valid options", func(t *testing.T) {
 		err := client.PolicySetParameters.Delete(ctx, psTest.ID, pTest.ID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("with non existing parameter ID", func(t *testing.T) {

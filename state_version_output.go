@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -13,9 +16,10 @@ var _ StateVersionOutputs = (*stateVersionOutputs)(nil)
 // They include the name and value of the output, as well as a sensitive boolean
 // if the value should be hidden by default in UIs.
 //
-// TFE API docs: https://www.terraform.io/docs/cloud/api/state-version-outputs.html
+// TFE API docs: https://developer.hashicorp.com/terraform/cloud-docs/api-docs/state-version-outputs
 type StateVersionOutputs interface {
 	Read(ctx context.Context, outputID string) (*StateVersionOutput, error)
+	ReadCurrent(ctx context.Context, workspaceID string) (*StateVersionOutputsList, error)
 }
 
 // stateVersionOutputs implements StateVersionOutputs.
@@ -30,22 +34,45 @@ type StateVersionOutput struct {
 	Sensitive bool        `jsonapi:"attr,sensitive"`
 	Type      string      `jsonapi:"attr,type"`
 	Value     interface{} `jsonapi:"attr,value"`
+	// BETA: This field is experimental and not universally present in all versions of TFE/Terraform
+	DetailedType interface{} `jsonapi:"attr,detailed-type"`
+}
+
+// ReadCurrent reads the current state version outputs for the specified workspace
+func (s *stateVersionOutputs) ReadCurrent(ctx context.Context, workspaceID string) (*StateVersionOutputsList, error) {
+	if !validStringID(&workspaceID) {
+		return nil, ErrInvalidWorkspaceID
+	}
+
+	u := fmt.Sprintf("workspaces/%s/current-state-version-outputs", url.PathEscape(workspaceID))
+	req, err := s.client.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	so := &StateVersionOutputsList{}
+	err = req.Do(ctx, so)
+	if err != nil {
+		return nil, err
+	}
+
+	return so, nil
 }
 
 // Read a State Version Output
 func (s *stateVersionOutputs) Read(ctx context.Context, outputID string) (*StateVersionOutput, error) {
 	if !validStringID(&outputID) {
-		return nil, ErrInvalidRunID
+		return nil, ErrInvalidOutputID
 	}
 
-	u := fmt.Sprintf("state-version-outputs/%s", url.QueryEscape(outputID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("state-version-outputs/%s", url.PathEscape(outputID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	so := &StateVersionOutput{}
-	err = s.client.do(ctx, req, so)
+	err = req.Do(ctx, so)
 	if err != nil {
 		return nil, err
 	}

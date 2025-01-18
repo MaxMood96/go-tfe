@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -12,13 +12,13 @@ import (
 )
 
 func TestAdminUsers_List(t *testing.T) {
-	skipIfCloud(t)
+	skipUnlessEnterprise(t)
 
 	client := testClient(t)
 	ctx := context.Background()
 
 	currentUser, err := client.Users.ReadCurrent(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	org, orgCleanup := createOrganization(t, client)
 	defer orgCleanup()
@@ -37,6 +37,7 @@ func TestAdminUsers_List(t *testing.T) {
 				PageSize:   100,
 			},
 		})
+
 		require.NoError(t, err)
 		// Out of range page number, so the items should be empty
 		assert.Empty(t, ul.Items)
@@ -55,10 +56,9 @@ func TestAdminUsers_List(t *testing.T) {
 
 	t.Run("query by username or email", func(t *testing.T) {
 		ul, err := client.Admin.Users.List(ctx, &AdminUserListOptions{
-			Query: currentUser.Username,
+			Query: "admin-security-maintenance",
 		})
 		require.NoError(t, err)
-		assert.Equal(t, currentUser.ID, ul.Items[0].ID)
 		assert.Equal(t, 1, ul.CurrentPage)
 		assert.Equal(t, true, ul.TotalCount == 1)
 
@@ -79,10 +79,10 @@ func TestAdminUsers_List(t *testing.T) {
 			Include: []AdminUserIncludeOpt{AdminUserOrgs},
 		})
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		require.NotEmpty(t, ul.Items)
+		require.NotEmpty(t, ul.Items[0].Organizations)
 
-		assert.NotEmpty(t, ul.Items)
-		assert.NotNil(t, ul.Items[0].Organizations)
 		assert.NotEmpty(t, ul.Items[0].Organizations[0].Name)
 	})
 
@@ -91,9 +91,9 @@ func TestAdminUsers_List(t *testing.T) {
 			Administrators: "true",
 		})
 
-		assert.NoError(t, err)
-		assert.NotEmpty(t, ul.Items)
-		assert.NotNil(t, ul.Items[0])
+		require.NoError(t, err)
+		require.NotEmpty(t, ul.Items)
+		require.NotNil(t, ul.Items[0])
 		// We use this `includesEmail` helper function because throughout
 		// the tests, there could be multiple admins, depending on the
 		// ordering of the test runs.
@@ -102,7 +102,7 @@ func TestAdminUsers_List(t *testing.T) {
 }
 
 func TestAdminUsers_Delete(t *testing.T) {
-	skipIfCloud(t)
+	skipUnlessEnterprise(t)
 
 	client := testClient(t)
 	ctx := context.Background()
@@ -133,7 +133,6 @@ func TestAdminUsers_Delete(t *testing.T) {
 		assert.Empty(t, ul.Items)
 		assert.Equal(t, 1, ul.CurrentPage)
 		assert.Equal(t, 0, ul.TotalCount)
-
 	})
 
 	t.Run("an non-existing user", func(t *testing.T) {
@@ -143,7 +142,7 @@ func TestAdminUsers_Delete(t *testing.T) {
 }
 
 func TestAdminUsers_Disable2FA(t *testing.T) {
-	skipIfCloud(t)
+	skipUnlessEnterprise(t)
 
 	client := testClient(t)
 	ctx := context.Background()
@@ -155,7 +154,7 @@ func TestAdminUsers_Disable2FA(t *testing.T) {
 	defer memberCleanup()
 
 	if !member.User.TwoFactor.Enabled {
-		t.Skip("User does not have 2FA enalbed. Skiping")
+		t.Skip("User does not have 2FA enabled. Skipping")
 	}
 	user, err := client.Admin.Users.Disable2FA(ctx, member.User.ID)
 	require.NoError(t, err)

@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package tfe
 
 import (
@@ -13,7 +16,7 @@ var _ TeamAccesses = (*teamAccesses)(nil)
 // Terraform Enterprise API supports.
 //
 // TFE API docs:
-// https://www.terraform.io/docs/cloud/api/team-access.html
+// https://developer.hashicorp.com/terraform/cloud-docs/api-docs/team-access
 type TeamAccesses interface {
 	// List all the team accesses for a given workspace.
 	List(ctx context.Context, options *TeamAccessListOptions) (*TeamAccessList, error)
@@ -98,6 +101,7 @@ type TeamAccess struct {
 	StateVersions    StateVersionsPermissionType `jsonapi:"attr,state-versions"`
 	SentinelMocks    SentinelMocksPermissionType `jsonapi:"attr,sentinel-mocks"`
 	WorkspaceLocking bool                        `jsonapi:"attr,workspace-locking"`
+	RunTasks         bool                        `jsonapi:"attr,run-tasks"`
 
 	// Relations
 	Team      *Team      `jsonapi:"relation,team"`
@@ -128,6 +132,7 @@ type TeamAccessAddOptions struct {
 	StateVersions    *StateVersionsPermissionType `jsonapi:"attr,state-versions,omitempty"`
 	SentinelMocks    *SentinelMocksPermissionType `jsonapi:"attr,sentinel-mocks,omitempty"`
 	WorkspaceLocking *bool                        `jsonapi:"attr,workspace-locking,omitempty"`
+	RunTasks         *bool                        `jsonapi:"attr,run-tasks,omitempty"`
 
 	// The team to add to the workspace
 	Team *Team `jsonapi:"relation,team"`
@@ -154,6 +159,7 @@ type TeamAccessUpdateOptions struct {
 	StateVersions    *StateVersionsPermissionType `jsonapi:"attr,state-versions,omitempty"`
 	SentinelMocks    *SentinelMocksPermissionType `jsonapi:"attr,sentinel-mocks,omitempty"`
 	WorkspaceLocking *bool                        `jsonapi:"attr,workspace-locking,omitempty"`
+	RunTasks         *bool                        `jsonapi:"attr,run-tasks,omitempty"`
 }
 
 // List all the team accesses for a given workspace.
@@ -162,13 +168,13 @@ func (s *teamAccesses) List(ctx context.Context, options *TeamAccessListOptions)
 		return nil, err
 	}
 
-	req, err := s.client.newRequest("GET", "team-workspaces", options)
+	req, err := s.client.NewRequest("GET", "team-workspaces", options)
 	if err != nil {
 		return nil, err
 	}
 
 	tal := &TeamAccessList{}
-	err = s.client.do(ctx, req, tal)
+	err = req.Do(ctx, tal)
 	if err != nil {
 		return nil, err
 	}
@@ -182,13 +188,13 @@ func (s *teamAccesses) Add(ctx context.Context, options TeamAccessAddOptions) (*
 		return nil, err
 	}
 
-	req, err := s.client.newRequest("POST", "team-workspaces", &options)
+	req, err := s.client.NewRequest("POST", "team-workspaces", &options)
 	if err != nil {
 		return nil, err
 	}
 
 	ta := &TeamAccess{}
-	err = s.client.do(ctx, req, ta)
+	err = req.Do(ctx, ta)
 	if err != nil {
 		return nil, err
 	}
@@ -202,14 +208,14 @@ func (s *teamAccesses) Read(ctx context.Context, teamAccessID string) (*TeamAcce
 		return nil, ErrInvalidAccessTeamID
 	}
 
-	u := fmt.Sprintf("team-workspaces/%s", url.QueryEscape(teamAccessID))
-	req, err := s.client.newRequest("GET", u, nil)
+	u := fmt.Sprintf("team-workspaces/%s", url.PathEscape(teamAccessID))
+	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	ta := &TeamAccess{}
-	err = s.client.do(ctx, req, ta)
+	err = req.Do(ctx, ta)
 	if err != nil {
 		return nil, err
 	}
@@ -223,14 +229,14 @@ func (s *teamAccesses) Update(ctx context.Context, teamAccessID string, options 
 		return nil, ErrInvalidAccessTeamID
 	}
 
-	u := fmt.Sprintf("team-workspaces/%s", url.QueryEscape(teamAccessID))
-	req, err := s.client.newRequest("PATCH", u, &options)
+	u := fmt.Sprintf("team-workspaces/%s", url.PathEscape(teamAccessID))
+	req, err := s.client.NewRequest("PATCH", u, &options)
 	if err != nil {
 		return nil, err
 	}
 
 	ta := &TeamAccess{}
-	err = s.client.do(ctx, req, ta)
+	err = req.Do(ctx, ta)
 	if err != nil {
 		return nil, err
 	}
@@ -244,13 +250,13 @@ func (s *teamAccesses) Remove(ctx context.Context, teamAccessID string) error {
 		return ErrInvalidAccessTeamID
 	}
 
-	u := fmt.Sprintf("team-workspaces/%s", url.QueryEscape(teamAccessID))
-	req, err := s.client.newRequest("DELETE", u, nil)
+	u := fmt.Sprintf("team-workspaces/%s", url.PathEscape(teamAccessID))
+	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
 	}
 
-	return s.client.do(ctx, req, nil)
+	return req.Do(ctx, nil)
 }
 
 func (o *TeamAccessListOptions) valid() error {

@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
 
 package tfe
 
@@ -12,13 +12,13 @@ import (
 )
 
 func TestTaskStagesRead(t *testing.T) {
-	skipIfBeta(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
+
+	upgradeOrganizationSubscription(t, client, orgTest)
 
 	runTaskTest, runTaskTestCleanup := createRunTask(t, client, orgTest)
 	defer runTaskTestCleanup()
@@ -36,6 +36,8 @@ func TestTaskStagesRead(t *testing.T) {
 		Include: []RunIncludeOpt{RunTaskStages},
 	})
 	require.NoError(t, err)
+	require.NotEmpty(t, r.TaskStages)
+	require.NotNil(t, r.TaskStages[0])
 
 	t.Run("without read options", func(t *testing.T) {
 		taskStage, err := client.TaskStages.Read(ctx, r.TaskStages[0].ID, nil)
@@ -62,6 +64,8 @@ func TestTaskStagesRead(t *testing.T) {
 			Include: []TaskStageIncludeOpt{TaskStageTaskResults},
 		})
 		require.NoError(t, err)
+		require.NotEmpty(t, taskStage.TaskResults)
+		require.NotNil(t, taskStage.TaskResults[0])
 
 		t.Run("task results are properly decoded", func(t *testing.T) {
 			assert.NotEmpty(t, taskStage.TaskResults[0].ID)
@@ -74,13 +78,13 @@ func TestTaskStagesRead(t *testing.T) {
 }
 
 func TestTaskStagesList(t *testing.T) {
-	skipIfBeta(t)
-
 	client := testClient(t)
 	ctx := context.Background()
 
 	orgTest, orgTestCleanup := createOrganization(t, client)
 	defer orgTestCleanup()
+
+	upgradeOrganizationSubscription(t, client, orgTest)
 
 	runTaskTest, runTaskTestCleanup := createRunTask(t, client, orgTest)
 	defer runTaskTestCleanup()
@@ -104,7 +108,7 @@ func TestTaskStagesList(t *testing.T) {
 		taskStageList, err := client.TaskStages.List(ctx, rTest.ID, nil)
 		require.NoError(t, err)
 
-		assert.NotNil(t, taskStageList.Items)
+		require.NotEmpty(t, taskStageList.Items)
 		assert.NotEmpty(t, taskStageList.Items[0].ID)
 		assert.Equal(t, 2, len(taskStageList.Items[0].TaskResults))
 	})
