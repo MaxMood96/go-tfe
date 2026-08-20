@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "version": "956901b5",
+    "version": "852cfdcb",
     "title": "HCP Terraform/Terraform Enterprise API v2-Beta",
     "description": "OpenAPI Specification for the HCP Terraform/Terraform Enterprise API V2 Public Beta.",
     "license": {
@@ -447,6 +447,11 @@
       ],
       "x-displayName": "Admin Banners",
       "description": "Site-wide announcement banner management for Terraform Enterprise administrators."
+    },
+    {
+      "name": "admin-customization-settings",
+      "x-displayName": "Admin Customization Settings",
+      "description": "Admin customization settings for Terraform Enterprise and HCP Terraform. TFE-only attributes (internal-support-url, internal-documentation-url, internal-tutorials-url, avatar-sources) are available only on Terraform Enterprise.\n"
     }
   ],
   "paths": {
@@ -615,6 +620,88 @@
           },
           "404": {
             "description": "Banner not found. The provided id does not match any banner.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error details",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/customization-settings": {
+      "get": {
+        "operationId": "getAdminCustomizationSettings",
+        "summary": "Retrieve Admin Customization Settings",
+        "description": "Returns the current admin customization settings singleton. This endpoint is available to all authenticated users (not restricted to site administrators) so that the UI can read customization values for display. TFE-only attributes (internal-support-url, internal-documentation-url, internal-tutorials-url, avatar-sources) are only present in the response when running Terraform Enterprise.\n",
+        "tags": [
+          "admin-customization-settings"
+        ],
+        "responses": {
+          "200": {
+            "description": "Customization settings retrieved successfully.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/admin-customization-settings-envelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error details",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateAdminCustomizationSettings",
+        "summary": "Update Admin Customization Settings",
+        "description": "Updates the admin customization settings singleton. Only site administrators may update these settings. Partial updates are supported: only attributes present in the request body are modified. TFE-only attributes (internal-support-url, internal-documentation-url, internal-tutorials-url, avatar-sources) are silently ignored when submitted against an HCP Terraform instance. Setting an optional URL field to null or an empty string clears the override and restores the default HashiCorp link.\n",
+        "tags": [
+          "admin-customization-settings"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/admin-customization-settings-envelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Customization settings updated successfully.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/admin-customization-settings-envelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed. For example, an invalid URL scheme was submitted.",
             "content": {
               "application/vnd.api+json": {
                 "schema": {
@@ -13587,7 +13674,7 @@
       "post": {
         "operationId": "addPolicySetPolicies",
         "summary": "Add Policies to a Policy Set",
-        "description": "Add policies to a policy set. Additive; existing memberships are preserved. Each `data` item is either an existing policy reference (by id) or an inline OOTB selection that materializes a catalog policy into the set -- see the request schema for both shapes. A policy set cannot mix custom and OOTB policies.",
+        "description": "Add policies to a policy set. Additive; existing memberships are preserved. Each `data` item references an existing policy by id; see the request schema for accepted shapes.",
         "tags": [
           "policy-sets"
         ],
@@ -22052,6 +22139,135 @@
         }
       }
     },
+    "/admin/github-app-installations": {
+      "x-vis": [
+        "tfe"
+      ],
+      "get": {
+        "operationId": "adminListGithubAppInstallations",
+        "summary": "List GitHub App Installations (Admin)",
+        "description": "List the webhook-synchronized installations of the site's Global GitHub App across every organization, including disconnected and suspended installations. This endpoint is exclusive to Terraform Enterprise and requires site-admin access.\n\nThis operation is only available in Terraform Enterprise.",
+        "tags": [
+          "github-app-installations"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "filter[query]",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "required": false,
+            "description": "Filter by GitHub account name (partial match) or exact GitHub installation ID."
+          },
+          {
+            "in": "query",
+            "name": "filter[status]",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "connected",
+                "disconnected",
+                "suspended"
+              ]
+            },
+            "required": false,
+            "description": "Filter by installation status. Defaults to all."
+          },
+          {
+            "in": "query",
+            "name": "filter[type]",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Organization",
+                "User"
+              ]
+            },
+            "required": false,
+            "description": "Filter by GitHub account type."
+          },
+          {
+            "$ref": "#/components/parameters/page_number"
+          },
+          {
+            "$ref": "#/components/parameters/page_size"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of GitHub App installations",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/github-app-installations"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "pagination": {
+                          "$ref": "#/components/schemas/pagination"
+                        },
+                        "total-installation-count": {
+                          "type": "integer",
+                          "description": "The unfiltered number of synchronized installations for the app, independent of the filter and page parameters."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error details",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/github-app-installations/refresh": {
+      "x-vis": [
+        "tfe"
+      ],
+      "post": {
+        "operationId": "adminRefreshGithubAppInstallations",
+        "summary": "Refresh GitHub App Installations (Admin)",
+        "description": "Request an on-demand reconciliation of the Global GitHub App's installation inventory against GitHub, recovering installations whose webhook deliveries were missed. Only available when the app is hosted on GHE.com. This endpoint is exclusive to Terraform Enterprise and requires site-admin access.\n\nThis operation is only available in Terraform Enterprise.",
+        "tags": [
+          "github-app-installations"
+        ],
+        "responses": {
+          "204": {
+            "description": "Reconciliation enqueued"
+          },
+          "default": {
+            "description": "Error details",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/organizations/{organization_name}/github-app-installations": {
       "get": {
         "operationId": "listOrganizationGithubAppInstallations",
@@ -23776,6 +23992,140 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/admin-banners"
+          }
+        }
+      },
+      "admin-customization-settings": {
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Always \"customization\"."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "customization-settings"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "support-email-address": {
+                "type": "string",
+                "nullable": true,
+                "description": "The support email address shown in help text on the site. When set, it is rendered as a mailto: link in the support link chain.\n"
+              },
+              "support-url-address": {
+                "type": "string",
+                "description": "The support URL shown in help text on the site. Used as the fallback when support-email-address is not set.\n"
+              },
+              "login-help": {
+                "type": "string",
+                "nullable": true,
+                "x-vis": [
+                  "tfe"
+                ],
+                "description": "HTML that overrides the default help text below the login form.\n\nThis attribute is only available in Terraform Enterprise."
+              },
+              "footer": {
+                "type": "string",
+                "nullable": true,
+                "x-vis": [
+                  "tfe"
+                ],
+                "description": "HTML rendered just above the copyright/release in the application footer.\n\n\nThis attribute is only available in Terraform Enterprise."
+              },
+              "error": {
+                "type": "string",
+                "nullable": true,
+                "x-vis": [
+                  "tfe"
+                ],
+                "description": "HTML that overrides the default error instructions.\n\nThis attribute is only available in Terraform Enterprise."
+              },
+              "new-user": {
+                "type": "string",
+                "nullable": true,
+                "x-vis": [
+                  "tfe"
+                ],
+                "description": "HTML shown to users when they first create an account.\n\nThis attribute is only available in Terraform Enterprise."
+              },
+              "internal-support-url": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 2048,
+                "x-vis": [
+                  "tfe"
+                ],
+                "description": "Overrides the default support links in the TFE UI (Help menu, error pages, welcome page). Accepts https://, http://, or mailto: schemes. Leave blank to restore the default HashiCorp support link resolution chain.\n\n\nThis attribute is only available in Terraform Enterprise."
+              },
+              "internal-documentation-url": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 2048,
+                "x-vis": [
+                  "tfe"
+                ],
+                "description": "Overrides documentation links in the TFE UI (Help menu). Accepts https:// or http:// only. Leave blank to use the default HashiCorp documentation URL.\n\n\nThis attribute is only available in Terraform Enterprise."
+              },
+              "internal-tutorials-url": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 2048,
+                "x-vis": [
+                  "tfe"
+                ],
+                "description": "Overrides tutorial links in the TFE UI (Help > Tutorials). Accepts https:// or http:// only. Leave blank to use the default HashiCorp tutorials URL.\n\n\nThis attribute is only available in Terraform Enterprise."
+              },
+              "avatar-sources": {
+                "type": "array",
+                "nullable": true,
+                "x-vis": [
+                  "tfe"
+                ],
+                "description": "Ordered catalog of configurable avatar sources with enabled/disabled flags. Initials is the implicit terminal fallback and is not included. PATCH accepts the same array format and performs a full replacement.\n\n\nThis attribute is only available in Terraform Enterprise.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "source",
+                    "enabled"
+                  ],
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "saml",
+                        "gravatar"
+                      ],
+                      "description": "The name of the avatar source."
+                    },
+                    "enabled": {
+                      "type": "boolean",
+                      "description": "Whether the source is active."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "admin-customization-settings-envelope": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/admin-customization-settings"
           }
         }
       },
@@ -26420,6 +26770,11 @@
                 ],
                 "readOnly": true,
                 "description": "The provisioning status of the user.\n- \"provisioned\": User was created via SCIM provisioning\n- \"claimed\": User claimed their account or existed before SCIM\n"
+              },
+              "username": {
+                "type": "string",
+                "readOnly": true,
+                "description": "The username/identity string from the SCIM provider."
               }
             }
           }
@@ -30912,6 +31267,20 @@
                   }
                 }
               },
+              "backing-data-state": {
+                "type": "string",
+                "readOnly": true,
+                "x-vis": [
+                  "tfe"
+                ],
+                "description": "Data retention lifecycle state of the plan's backing data.\n\nThis attribute is only available in Terraform Enterprise.",
+                "enum": [
+                  "backing_data_initialized",
+                  "backing_data_available",
+                  "backing_data_soft_deleted",
+                  "backing_data_permanently_deleted"
+                ]
+              },
               "permissions": {
                 "type": "object",
                 "description": "Permissions for the current user related to this plan",
@@ -32096,10 +32465,10 @@
           },
           "included": {
             "type": "array",
-            "description": "Sideloaded resources. `?include=policies` sideloads the full policy resources, including OOTB-origin ones. It does NOT sideload their `ootb-policies` catalog resources (control source, catalog metadata, download identity) — request `?include=policies.ootb-policy` for those.",
+            "description": "Sideloaded resources. `?include=policies` sideloads the full policy resources.",
             "items": {
               "type": "object",
-              "description": "A sideloaded resource. May be a `policies` resource (type \"policies\"), an `ootb-policies` resource (type \"ootb-policies\"), a `workspaces` resource (type \"workspaces\"), or another allowlisted type."
+              "description": "A sideloaded resource. May be a `policies` resource (type \"policies\"), a `workspaces` resource (type \"workspaces\"), or another allowlisted type."
             }
           }
         }
@@ -32841,6 +33210,20 @@
                 "readOnly": true,
                 "type": "integer",
                 "nullable": true
+              },
+              "backing-data-state": {
+                "type": "string",
+                "readOnly": true,
+                "x-vis": [
+                  "tfe"
+                ],
+                "description": "Data retention lifecycle state of the apply's backing data.\n\nThis attribute is only available in Terraform Enterprise.",
+                "enum": [
+                  "backing_data_initialized",
+                  "backing_data_available",
+                  "backing_data_soft_deleted",
+                  "backing_data_permanently_deleted"
+                ]
               }
             }
           },
@@ -35287,6 +35670,14 @@
               "installation-url": {
                 "type": "string",
                 "nullable": true
+              },
+              "disconnected": {
+                "type": "boolean",
+                "description": "True when GitHub no longer reports this installation."
+              },
+              "suspended": {
+                "type": "boolean",
+                "description": "True when the installation is suspended on GitHub."
               }
             }
           }
