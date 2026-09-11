@@ -10038,8 +10038,9 @@ type PolicySet struct {
 	TagSelectors []*PolicySetTagSelectorAttr `jsonapi:"attr,tag-selectors"`
 
 	// TagSelectorMatchingLogic controls how multiple tag selectors are combined.
-	// "any" (default) means OR semantics — applies to workspaces matching any selector.
+	// "any" means OR semantics — applies to workspaces matching any selector.
 	// "all" means AND semantics — applies only to workspaces matching all selectors.
+	// nil when no tag selectors are active.
 	TagSelectorMatchingLogic *string `jsonapi:"attr,tag-selector-matching-logic"`
 
 	// Relations
@@ -10172,8 +10173,9 @@ type PolicySetCreateOptions struct {
 	TagSelectors []*PolicySetTagSelector `jsonapi:"attr,tag-selectors,omitempty"`
 
 	// Optional: Matching logic for tag selectors.
-	// Valid values: "any" (OR, default) or "all" (AND — workspace must match all selectors).
-	TagSelectorMatchingLogic *string `jsonapi:"attr,tag-selector-matching-logic,omitempty"`
+	// Three-state: zero value (unset) = field omitted from request body (don't touch);
+	// NullableString("any"/"all") = set value; NullString() = explicitly clear.
+	TagSelectorMatchingLogic jsonapi.NullableAttr[string] `jsonapi:"attr,tag-selector-matching-logic,omitempty"`
 }
 
 // PolicySetUpdateOptions represents the options for updating a policy set.
@@ -10220,8 +10222,9 @@ type PolicySetUpdateOptions struct {
 	VCSRepo *VCSRepoOptions `jsonapi:"attr,vcs-repo,omitempty"`
 	
 	// Optional: Matching logic for tag selectors.
-	// Valid values: "any" (OR, default) or "all" (AND — workspace must match all selectors).
-	TagSelectorMatchingLogic *string `jsonapi:"attr,tag-selector-matching-logic,omitempty"`
+	// Three-state: zero value (unset) = field omitted from request body (don't touch);
+	// NullableString("any"/"all") = set value; NullString() = explicitly clear.
+	TagSelectorMatchingLogic jsonapi.NullableAttr[string] `jsonapi:"attr,tag-selector-matching-logic,omitempty"`
 }
 
 // PolicySetAddPoliciesOptions represents the options for adding policies
@@ -10659,8 +10662,11 @@ func (o PolicySetCreateOptions) valid() error {
 	if !validStringID(o.Name) {
 		return ErrInvalidName
 	}
-	if o.TagSelectorMatchingLogic != nil {
-		v := *o.TagSelectorMatchingLogic
+	if o.TagSelectorMatchingLogic.IsSpecified() && !o.TagSelectorMatchingLogic.IsNull() {
+		v, err := o.TagSelectorMatchingLogic.Get()
+		if err != nil {
+			return err
+		}
 		if v != "any" && v != "all" {
 			return ErrInvalidTagSelectorMatchingLogic
 		}
@@ -10702,8 +10708,11 @@ func (o PolicySetUpdateOptions) valid() error {
 	if o.Name != nil && !validStringID(o.Name) {
 		return ErrInvalidName
 	}
-	if o.TagSelectorMatchingLogic != nil {
-		v := *o.TagSelectorMatchingLogic
+	if o.TagSelectorMatchingLogic.IsSpecified() && !o.TagSelectorMatchingLogic.IsNull() {
+		v, err := o.TagSelectorMatchingLogic.Get()
+		if err != nil {
+			return err
+		}
 		if v != "any" && v != "all" {
 			return ErrInvalidTagSelectorMatchingLogic
 		}
