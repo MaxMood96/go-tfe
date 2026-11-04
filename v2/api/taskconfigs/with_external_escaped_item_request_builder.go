@@ -7,6 +7,7 @@ import (
     "context"
     i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f "github.com/microsoft/kiota-abstractions-go"
     i05d5aa6b14db285c2e8df48c915f7a7082b77b17cca0def522e18528f80bec16 "github.com/hashicorp/go-tfe/v2/api/models"
+    i42462dc6584d5465d4564f70e24254d294ef50e2cbf66cf71340733a7ea71be0 "github.com/hashicorp/go-tfe/v2/api/taskconfigs/item"
 )
 
 // WithExternal_ItemRequestBuilder builds and executes requests for operations under \task-configs\{external_id}
@@ -17,13 +18,13 @@ type WithExternal_ItemRequestBuilder struct {
 type WithExternal_ItemRequestBuilderGetQueryParameters struct {
     // Return only the specified fields for task-configs resource(s) in the response. Use underscores for identifiers that contain a dash: For example, auto_apply instead of auto-apply. An empty value indicates that no fields should be returned.
     FieldstaskConfigs []string "uriparametername:\"fields%5Btask%2Dconfigs%5D\""
-    // Allows including related resource data. Value must be a comma-separated list containing one or more of `projects`, `task`, `owner`, or `organization`.
-    Include *string "uriparametername:\"include\""
+    // Optionally side-load the specified relationships.
+    Include []i42462dc6584d5465d4564f70e24254d294ef50e2cbf66cf71340733a7ea71be0.GetIncludeQueryParameterType "uriparametername:\"include\""
 }
 // NewWithExternal_ItemRequestBuilderInternal instantiates a new WithExternal_ItemRequestBuilder and sets the default values.
 func NewWithExternal_ItemRequestBuilderInternal(pathParameters map[string]string, requestAdapter i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.RequestAdapter)(*WithExternal_ItemRequestBuilder) {
     m := &WithExternal_ItemRequestBuilder{
-        BaseRequestBuilder: *i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.NewBaseRequestBuilder(requestAdapter, "{+baseurl}/task-configs/{external_id}{?fields%5Btask%2Dconfigs%5D,include*}", pathParameters),
+        BaseRequestBuilder: *i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.NewBaseRequestBuilder(requestAdapter, "{+baseurl}/task-configs/{external_id}{?fields%5Btask%2Dconfigs%5D,include}", pathParameters),
     }
     return m
 }
@@ -32,6 +33,22 @@ func NewWithExternal_ItemRequestBuilder(rawUrl string, requestAdapter i2ae4187f7
     urlParams := make(map[string]string)
     urlParams["request-raw-url"] = rawUrl
     return NewWithExternal_ItemRequestBuilderInternal(urlParams, requestAdapter)
+}
+// Delete delete a task configuration.
+// returns a Errors error when the service returns a 4XX or 5XX status code
+func (m *WithExternal_ItemRequestBuilder) Delete(ctx context.Context, requestConfiguration *i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.RequestConfiguration[i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.DefaultQueryParameters])(error) {
+    requestInfo, err := m.ToDeleteRequestInformation(ctx, requestConfiguration);
+    if err != nil {
+        return err
+    }
+    errorMapping := i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.ErrorMappings {
+        "XXX": i05d5aa6b14db285c2e8df48c915f7a7082b77b17cca0def522e18528f80bec16.CreateErrorsFromDiscriminatorValue,
+    }
+    err = m.BaseRequestBuilder.RequestAdapter.SendNoContent(ctx, requestInfo, errorMapping)
+    if err != nil {
+        return err
+    }
+    return nil
 }
 // Get get details about a task configuration.
 // returns a TaskConfigsEnvelopeable when successful
@@ -72,6 +89,14 @@ func (m *WithExternal_ItemRequestBuilder) Patch(ctx context.Context, body i05d5a
         return nil, nil
     }
     return res.(i05d5aa6b14db285c2e8df48c915f7a7082b77b17cca0def522e18528f80bec16.TaskConfigsEnvelopeable), nil
+}
+// ToDeleteRequestInformation delete a task configuration.
+// returns a *RequestInformation when successful
+func (m *WithExternal_ItemRequestBuilder) ToDeleteRequestInformation(ctx context.Context, requestConfiguration *i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.RequestConfiguration[i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.DefaultQueryParameters])(*i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.RequestInformation, error) {
+    requestInfo := i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.NewRequestInformationWithMethodAndUrlTemplateAndPathParameters(i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.DELETE, m.BaseRequestBuilder.UrlTemplate, m.BaseRequestBuilder.PathParameters)
+    i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.ConfigureRequestInformation(requestInfo, requestConfiguration)
+    requestInfo.Headers.TryAdd("Accept", "application/vnd.api+json")
+    return requestInfo, nil
 }
 // ToGetRequestInformation get details about a task configuration.
 // returns a *RequestInformation when successful
