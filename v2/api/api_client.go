@@ -60,10 +60,12 @@ import (
     ibf7fd1fa2ca0bf7fb12935559937de9677520241442b7cdbac8246a8cd14147d "github.com/hashicorp/go-tfe/v2/api/plans"
     ic7d637b0cea32015f6fe8fdda69f69b83f2bfb9c9db69ebd650f42d7037fccf7 "github.com/hashicorp/go-tfe/v2/api/projects"
     icb14f7803522f70670dfb51a8f10d6fe7cf82358c4fcfbd434ce7b83bc7fa67f "github.com/hashicorp/go-tfe/v2/api/emailrecipientstatuses"
+    icb6dd076d83cbc04bd2b9b36bb31809cf9d30789d2cb530a59a6a0363b7d4aa9 "github.com/hashicorp/go-tfe/v2/api/stackpolicyevaluations"
     icbcddf85972cc20a622a9d6c94202891e7df60ee16895ccd937c26fe9c9bc6c7 "github.com/hashicorp/go-tfe/v2/api/stackdeploymentruns"
     ice175c2bc5dca7fd242eaf5d94389218212237a00a32175e232d6873e8576627 "github.com/hashicorp/go-tfe/v2/api/oauthtokens"
     id37f321ec9d929c628c7d6b68b52c0895a210904bdfe553054b3b8144f73ba73 "github.com/hashicorp/go-tfe/v2/api/assessmentresults"
     id5ec4c82a134dcd79c70d0d55525fbbe00a46f7a637bb7d1f1f818bdbb15d0f9 "github.com/hashicorp/go-tfe/v2/api/stackstates"
+    id6c41237ebd1ccc5b2103ff0dd17295a762e86d0c7439b5c6bf421ff407025ed "github.com/hashicorp/go-tfe/v2/api/ootbpolicies"
     id6f566863c53cc08116f3b49bdb31efb7ba723bea06fdf6c76b4f1e4af545a6d "github.com/hashicorp/go-tfe/v2/api/policychecks"
     ida37032331931bdbac35f8b15434de19f19da392d7e7a114a8246766075382a9 "github.com/hashicorp/go-tfe/v2/api/providersets"
     ie130cfa8b5f3763f675a0be8d887bc5a809e7f419969393d0dc9004d3aea5218 "github.com/hashicorp/go-tfe/v2/api/users"
@@ -169,6 +171,10 @@ func NewApiClient(requestAdapter i2ae4187f7daee263371cb1c977df639813ab50ffa52901
     i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.RegisterDefaultDeserializer(func() i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNodeFactory { return i25911dc319edd61cbac496af7eab5ef20b6069a42515e22ec6a9bc97bf598488.NewJsonParseNodeFactory() })
     i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.RegisterDefaultDeserializer(func() i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNodeFactory { return i7294a22093d408fdca300f11b81a887d89c47b764af06c8b803e2323973fdb83.NewTextParseNodeFactory() })
     i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.RegisterDefaultDeserializer(func() i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNodeFactory { return i4bcdc892e61ac17e2afc10b5e2b536b29f4fd6c1ad30f4a5a68df47495db3347.NewFormParseNodeFactory() })
+    if m.BaseRequestBuilder.RequestAdapter.GetBaseUrl() == "" {
+        m.BaseRequestBuilder.RequestAdapter.SetBaseUrl("https://app.terraform.io/api/v2")
+    }
+    m.BaseRequestBuilder.PathParameters["baseurl"] = m.BaseRequestBuilder.RequestAdapter.GetBaseUrl()
     return m
 }
 // CostEstimates the costEstimates property
@@ -235,6 +241,11 @@ func (m *ApiClient) OauthTokens()(*ice175c2bc5dca7fd242eaf5d94389218212237a00a32
 // returns a *OidcConfigurationsRequestBuilder when successful
 func (m *ApiClient) OidcConfigurations()(*if3894ce9f379496defbab576723e90858f31cec6e3332422399d7f37035d9d94.OidcConfigurationsRequestBuilder) {
     return if3894ce9f379496defbab576723e90858f31cec6e3332422399d7f37035d9d94.NewOidcConfigurationsRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
+}
+// OotbPolicies the ootbPolicies property
+// returns a *OotbPoliciesRequestBuilder when successful
+func (m *ApiClient) OotbPolicies()(*id6c41237ebd1ccc5b2103ff0dd17295a762e86d0c7439b5c6bf421ff407025ed.OotbPoliciesRequestBuilder) {
+    return id6c41237ebd1ccc5b2103ff0dd17295a762e86d0c7439b5c6bf421ff407025ed.NewOotbPoliciesRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
 }
 // Organization the organization property
 // returns a *OrganizationRequestBuilder when successful
@@ -360,6 +371,11 @@ func (m *ApiClient) StackDeploymentSteps()(*i6f30b1c546be9fdd86fa13ffd486beba48d
 // returns a *StackDiagnosticsRequestBuilder when successful
 func (m *ApiClient) StackDiagnostics()(*i463ffeb54eeae51cb0c3aeff51adc1e34e91b5ef2ed5d2a48191f6e34ce6ffb8.StackDiagnosticsRequestBuilder) {
     return i463ffeb54eeae51cb0c3aeff51adc1e34e91b5ef2ed5d2a48191f6e34ce6ffb8.NewStackDiagnosticsRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
+}
+// StackPolicyEvaluations the stackPolicyEvaluations property
+// returns a *StackPolicyEvaluationsRequestBuilder when successful
+func (m *ApiClient) StackPolicyEvaluations()(*icb6dd076d83cbc04bd2b9b36bb31809cf9d30789d2cb530a59a6a0363b7d4aa9.StackPolicyEvaluationsRequestBuilder) {
+    return icb6dd076d83cbc04bd2b9b36bb31809cf9d30789d2cb530a59a6a0363b7d4aa9.NewStackPolicyEvaluationsRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
 }
 // Stacks the stacks property
 // returns a *StacksRequestBuilder when successful
