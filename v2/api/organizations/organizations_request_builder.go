@@ -17,13 +17,13 @@ type OrganizationsRequestBuilder struct {
 type OrganizationsRequestBuilderGetQueryParameters struct {
     // Return only the specified fields for organizations resource(s) in the response. Use underscores for identifiers that contain a dash: For example, auto_apply instead of auto-apply. An empty value indicates that no fields should be returned.
     Fieldsorganizations []string "uriparametername:\"fields%5Borganizations%5D\""
-    // Optionally side-load relationships of the specified name
+    // Optionally side-load the specified relationships.
     Include []GetIncludeQueryParameterType "uriparametername:\"include\""
     // The page number to retrieve.
     Pagenumber *int32 "uriparametername:\"page%5Bnumber%5D\""
     // The number of items to retrieve per page. Defaults to 20.
     Pagesize *int32 "uriparametername:\"page%5Bsize%5D\""
-    // A search query string. Organizations are searchable by name and notification email.
+    // A search query string. Organizations are searchable by name and notification email. Queries starting with `org-` also match an exact organization ID.
     Q *string "uriparametername:\"q\""
     // A search query string. This query searches organizations by notification email.
     Qemail *string "uriparametername:\"q%5Bemail%5D\""
