@@ -18,13 +18,18 @@ type WithStack_deployment_group_ItemRequestBuilder struct {
 type WithStack_deployment_group_ItemRequestBuilderGetQueryParameters struct {
     // Return only the specified fields for stack-deployment-groups resource(s) in the response. Use underscores for identifiers that contain a dash: For example, auto_apply instead of auto-apply. An empty value indicates that no fields should be returned.
     FieldsstackDeploymentGroups []string "uriparametername:\"fields%5Bstack%2Ddeployment%2Dgroups%5D\""
-    // Optionally side-load relationships. Accepts a comma-separated list of the enumerated values.
+    // Optionally side-load the specified relationships.
     Include []i168e8b5818149f916e1d4279c1f66330e436d123653daacab7ce187ca22b329b.GetIncludeQueryParameterType "uriparametername:\"include\""
 }
 // ApproveAllPlans the approveAllPlans property
 // returns a *ItemApproveAllPlansRequestBuilder when successful
 func (m *WithStack_deployment_group_ItemRequestBuilder) ApproveAllPlans()(*ItemApproveAllPlansRequestBuilder) {
     return NewItemApproveAllPlansRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
+}
+// Cancel the cancel property
+// returns a *ItemCancelRequestBuilder when successful
+func (m *WithStack_deployment_group_ItemRequestBuilder) Cancel()(*ItemCancelRequestBuilder) {
+    return NewItemCancelRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
 }
 // NewWithStack_deployment_group_ItemRequestBuilderInternal instantiates a new WithStack_deployment_group_ItemRequestBuilder and sets the default values.
 func NewWithStack_deployment_group_ItemRequestBuilderInternal(pathParameters map[string]string, requestAdapter i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.RequestAdapter)(*WithStack_deployment_group_ItemRequestBuilder) {
@@ -68,6 +73,11 @@ func (m *WithStack_deployment_group_ItemRequestBuilder) Rerun()(*ItemRerunReques
 // returns a *ItemStackDeploymentRunsRequestBuilder when successful
 func (m *WithStack_deployment_group_ItemRequestBuilder) StackDeploymentRuns()(*ItemStackDeploymentRunsRequestBuilder) {
     return NewItemStackDeploymentRunsRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
+}
+// Start the start property
+// returns a *ItemStartRequestBuilder when successful
+func (m *WithStack_deployment_group_ItemRequestBuilder) Start()(*ItemStartRequestBuilder) {
+    return NewItemStartRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
 }
 // ToGetRequestInformation get details about a stack deployment group.
 // returns a *RequestInformation when successful
