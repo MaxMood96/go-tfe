@@ -32,8 +32,12 @@ type Users_attributes_permissions struct {
     canUpdateUser *bool
     // The canUseSqlRunner property
     canUseSqlRunner *bool
+    // Whether the user can view and author feature announcements in the admin UI.This attribute is only available in HCP Terraform.This attribute is considered BETA, is SUBJECT TO CHANGE, and may be unavailable to some users.
+    canViewAdminInAppNotifications *bool
     // The canViewAdminRuns property
     canViewAdminRuns *bool
+    // Whether the user can view users in the admin UI.
+    canViewAdminUsers *bool
     // The canViewAdminWorkspaces property
     canViewAdminWorkspaces *bool
     // The canViewCostEstimationSettings property
@@ -129,10 +133,20 @@ func (m *Users_attributes_permissions) GetCanUpdateUser()(*bool) {
 func (m *Users_attributes_permissions) GetCanUseSqlRunner()(*bool) {
     return m.canUseSqlRunner
 }
+// GetCanViewAdminInAppNotifications gets the can-view-admin-in-app-notifications property value. Whether the user can view and author feature announcements in the admin UI.This attribute is only available in HCP Terraform.This attribute is considered BETA, is SUBJECT TO CHANGE, and may be unavailable to some users.
+// returns a *bool when successful
+func (m *Users_attributes_permissions) GetCanViewAdminInAppNotifications()(*bool) {
+    return m.canViewAdminInAppNotifications
+}
 // GetCanViewAdminRuns gets the can-view-admin-runs property value. The canViewAdminRuns property
 // returns a *bool when successful
 func (m *Users_attributes_permissions) GetCanViewAdminRuns()(*bool) {
     return m.canViewAdminRuns
+}
+// GetCanViewAdminUsers gets the can-view-admin-users property value. Whether the user can view users in the admin UI.
+// returns a *bool when successful
+func (m *Users_attributes_permissions) GetCanViewAdminUsers()(*bool) {
+    return m.canViewAdminUsers
 }
 // GetCanViewAdminWorkspaces gets the can-view-admin-workspaces property value. The canViewAdminWorkspaces property
 // returns a *bool when successful
@@ -303,6 +317,16 @@ func (m *Users_attributes_permissions) GetFieldDeserializers()(map[string]func(i
         }
         return nil
     }
+    res["can-view-admin-in-app-notifications"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
+        val, err := n.GetBoolValue()
+        if err != nil {
+            return err
+        }
+        if val != nil {
+            m.SetCanViewAdminInAppNotifications(val)
+        }
+        return nil
+    }
     res["can-view-admin-runs"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
         val, err := n.GetBoolValue()
         if err != nil {
@@ -310,6 +334,16 @@ func (m *Users_attributes_permissions) GetFieldDeserializers()(map[string]func(i
         }
         if val != nil {
             m.SetCanViewAdminRuns(val)
+        }
+        return nil
+    }
+    res["can-view-admin-users"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
+        val, err := n.GetBoolValue()
+        if err != nil {
+            return err
+        }
+        if val != nil {
+            m.SetCanViewAdminUsers(val)
         }
         return nil
     }
@@ -494,7 +528,19 @@ func (m *Users_attributes_permissions) Serialize(writer i878a80d2330e89d26896388
         }
     }
     {
+        err := writer.WriteBoolValue("can-view-admin-in-app-notifications", m.GetCanViewAdminInAppNotifications())
+        if err != nil {
+            return err
+        }
+    }
+    {
         err := writer.WriteBoolValue("can-view-admin-runs", m.GetCanViewAdminRuns())
+        if err != nil {
+            return err
+        }
+    }
+    {
+        err := writer.WriteBoolValue("can-view-admin-users", m.GetCanViewAdminUsers())
         if err != nil {
             return err
         }
@@ -621,9 +667,17 @@ func (m *Users_attributes_permissions) SetCanUpdateUser(value *bool)() {
 func (m *Users_attributes_permissions) SetCanUseSqlRunner(value *bool)() {
     m.canUseSqlRunner = value
 }
+// SetCanViewAdminInAppNotifications sets the can-view-admin-in-app-notifications property value. Whether the user can view and author feature announcements in the admin UI.This attribute is only available in HCP Terraform.This attribute is considered BETA, is SUBJECT TO CHANGE, and may be unavailable to some users.
+func (m *Users_attributes_permissions) SetCanViewAdminInAppNotifications(value *bool)() {
+    m.canViewAdminInAppNotifications = value
+}
 // SetCanViewAdminRuns sets the can-view-admin-runs property value. The canViewAdminRuns property
 func (m *Users_attributes_permissions) SetCanViewAdminRuns(value *bool)() {
     m.canViewAdminRuns = value
+}
+// SetCanViewAdminUsers sets the can-view-admin-users property value. Whether the user can view users in the admin UI.
+func (m *Users_attributes_permissions) SetCanViewAdminUsers(value *bool)() {
+    m.canViewAdminUsers = value
 }
 // SetCanViewAdminWorkspaces sets the can-view-admin-workspaces property value. The canViewAdminWorkspaces property
 func (m *Users_attributes_permissions) SetCanViewAdminWorkspaces(value *bool)() {
@@ -683,7 +737,9 @@ type Users_attributes_permissionsable interface {
     GetCanReenable2faByUnlinking()(*bool)
     GetCanUpdateUser()(*bool)
     GetCanUseSqlRunner()(*bool)
+    GetCanViewAdminInAppNotifications()(*bool)
     GetCanViewAdminRuns()(*bool)
+    GetCanViewAdminUsers()(*bool)
     GetCanViewAdminWorkspaces()(*bool)
     GetCanViewCostEstimationSettings()(*bool)
     GetCanViewCustomizationSettings()(*bool)
@@ -706,7 +762,9 @@ type Users_attributes_permissionsable interface {
     SetCanReenable2faByUnlinking(value *bool)()
     SetCanUpdateUser(value *bool)()
     SetCanUseSqlRunner(value *bool)()
+    SetCanViewAdminInAppNotifications(value *bool)()
     SetCanViewAdminRuns(value *bool)()
+    SetCanViewAdminUsers(value *bool)()
     SetCanViewAdminWorkspaces(value *bool)()
     SetCanViewCostEstimationSettings(value *bool)()
     SetCanViewCustomizationSettings(value *bool)()
