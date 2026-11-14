@@ -37,13 +37,14 @@ type Runs_attributes struct {
     isDestroy *bool
     // The message property
     message *string
-    // The minimalRefresh property
+    // This attribute is only available in HCP Terraform.
     minimalRefresh *bool
     // The permissions property
     permissions Runs_attributes_permissionsable
     // The planOnly property
     planOnly *bool
     // The policyPaths property
+    // Deprecated: 
     policyPaths []string
     // The refresh property
     refresh *bool
@@ -55,7 +56,7 @@ type Runs_attributes struct {
     savePlan *bool
     // The source property
     source *string
-    // The current status of the run.**Note:** The following status values are in public-beta:- `tf_policy_checked` - Terraform Policy evaluation completed at plan stage- `tf_policy_override` - Terraform Policy evaluation was overridden at plan stage
+    // The current status of the run.Terraform Policy evaluation status values at plan stage:- `tf_policy_checked` - Terraform Policy evaluation completed- `tf_policy_override` - Terraform Policy evaluation was overridden
     status *Runs_attributes_status
     // The statusTimestamps property
     statusTimestamps Runs_attributes_statusTimestampsable
@@ -490,7 +491,7 @@ func (m *Runs_attributes) GetIsDestroy()(*bool) {
 func (m *Runs_attributes) GetMessage()(*string) {
     return m.message
 }
-// GetMinimalRefresh gets the minimal-refresh property value. The minimalRefresh property
+// GetMinimalRefresh gets the minimal-refresh property value. This attribute is only available in HCP Terraform.
 // returns a *bool when successful
 func (m *Runs_attributes) GetMinimalRefresh()(*bool) {
     return m.minimalRefresh
@@ -506,6 +507,7 @@ func (m *Runs_attributes) GetPlanOnly()(*bool) {
     return m.planOnly
 }
 // GetPolicyPaths gets the policy-paths property value. The policyPaths property
+// Deprecated: 
 // returns a []string when successful
 func (m *Runs_attributes) GetPolicyPaths()([]string) {
     return m.policyPaths
@@ -535,7 +537,7 @@ func (m *Runs_attributes) GetSavePlan()(*bool) {
 func (m *Runs_attributes) GetSource()(*string) {
     return m.source
 }
-// GetStatus gets the status property value. The current status of the run.**Note:** The following status values are in public-beta:- `tf_policy_checked` - Terraform Policy evaluation completed at plan stage- `tf_policy_override` - Terraform Policy evaluation was overridden at plan stage
+// GetStatus gets the status property value. The current status of the run.Terraform Policy evaluation status values at plan stage:- `tf_policy_checked` - Terraform Policy evaluation completed- `tf_policy_override` - Terraform Policy evaluation was overridden
 // returns a *Runs_attributes_status when successful
 func (m *Runs_attributes) GetStatus()(*Runs_attributes_status) {
     return m.status
@@ -804,7 +806,7 @@ func (m *Runs_attributes) SetIsDestroy(value *bool)() {
 func (m *Runs_attributes) SetMessage(value *string)() {
     m.message = value
 }
-// SetMinimalRefresh sets the minimal-refresh property value. The minimalRefresh property
+// SetMinimalRefresh sets the minimal-refresh property value. This attribute is only available in HCP Terraform.
 func (m *Runs_attributes) SetMinimalRefresh(value *bool)() {
     m.minimalRefresh = value
 }
@@ -817,6 +819,7 @@ func (m *Runs_attributes) SetPlanOnly(value *bool)() {
     m.planOnly = value
 }
 // SetPolicyPaths sets the policy-paths property value. The policyPaths property
+// Deprecated: 
 func (m *Runs_attributes) SetPolicyPaths(value []string)() {
     m.policyPaths = value
 }
@@ -840,7 +843,7 @@ func (m *Runs_attributes) SetSavePlan(value *bool)() {
 func (m *Runs_attributes) SetSource(value *string)() {
     m.source = value
 }
-// SetStatus sets the status property value. The current status of the run.**Note:** The following status values are in public-beta:- `tf_policy_checked` - Terraform Policy evaluation completed at plan stage- `tf_policy_override` - Terraform Policy evaluation was overridden at plan stage
+// SetStatus sets the status property value. The current status of the run.Terraform Policy evaluation status values at plan stage:- `tf_policy_checked` - Terraform Policy evaluation completed- `tf_policy_override` - Terraform Policy evaluation was overridden
 func (m *Runs_attributes) SetStatus(value *Runs_attributes_status)() {
     m.status = value
 }

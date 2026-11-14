@@ -13,6 +13,10 @@ type Stacks_attributes struct {
     additionalData map[string]any
     // The createdAt property
     createdAt *i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time
+    // The client that created the stack (e.g. the API client name), prefixed with `migration-` when the stack was created by a migration.
+    creationSource *string
+    // Whether debug logging is enabled for this stack's operations.
+    debuggingMode *bool
     // The deleteable property
     deleteable *bool
     // The description property
@@ -27,10 +31,15 @@ type Stacks_attributes struct {
     name *string
     // The outputsCount property
     outputsCount *int32
+    // The resourceCount property
+    resourceCount *int32
     // The settingOverwrites property
     settingOverwrites Stacks_attributes_settingOverwritesable
     // The speculativeEnabled property
     speculativeEnabled *bool
+    // Deprecated. Use the trigger patterns on the stack's version control settings instead.
+    // Deprecated: 
+    triggerPatterns []string
     // The updatedAt property
     updatedAt *i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time
     // The upstreamCount property
@@ -61,6 +70,16 @@ func (m *Stacks_attributes) GetAdditionalData()(map[string]any) {
 // returns a *Time when successful
 func (m *Stacks_attributes) GetCreatedAt()(*i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time) {
     return m.createdAt
+}
+// GetCreationSource gets the creation-source property value. The client that created the stack (e.g. the API client name), prefixed with `migration-` when the stack was created by a migration.
+// returns a *string when successful
+func (m *Stacks_attributes) GetCreationSource()(*string) {
+    return m.creationSource
+}
+// GetDebuggingMode gets the debugging-mode property value. Whether debug logging is enabled for this stack's operations.
+// returns a *bool when successful
+func (m *Stacks_attributes) GetDebuggingMode()(*bool) {
+    return m.debuggingMode
 }
 // GetDeleteable gets the deleteable property value. The deleteable property
 // returns a *bool when successful
@@ -93,6 +112,26 @@ func (m *Stacks_attributes) GetFieldDeserializers()(map[string]func(i878a80d2330
         }
         if val != nil {
             m.SetCreatedAt(val)
+        }
+        return nil
+    }
+    res["creation-source"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
+        val, err := n.GetStringValue()
+        if err != nil {
+            return err
+        }
+        if val != nil {
+            m.SetCreationSource(val)
+        }
+        return nil
+    }
+    res["debugging-mode"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
+        val, err := n.GetBoolValue()
+        if err != nil {
+            return err
+        }
+        if val != nil {
+            m.SetDebuggingMode(val)
         }
         return nil
     }
@@ -166,6 +205,16 @@ func (m *Stacks_attributes) GetFieldDeserializers()(map[string]func(i878a80d2330
         }
         return nil
     }
+    res["resource-count"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
+        val, err := n.GetInt32Value()
+        if err != nil {
+            return err
+        }
+        if val != nil {
+            m.SetResourceCount(val)
+        }
+        return nil
+    }
     res["setting-overwrites"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
         val, err := n.GetObjectValue(CreateStacks_attributes_settingOverwritesFromDiscriminatorValue)
         if err != nil {
@@ -183,6 +232,22 @@ func (m *Stacks_attributes) GetFieldDeserializers()(map[string]func(i878a80d2330
         }
         if val != nil {
             m.SetSpeculativeEnabled(val)
+        }
+        return nil
+    }
+    res["trigger-patterns"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
+        val, err := n.GetCollectionOfPrimitiveValues("string")
+        if err != nil {
+            return err
+        }
+        if val != nil {
+            res := make([]string, len(val))
+            for i, v := range val {
+                if v != nil {
+                    res[i] = *(v.(*string))
+                }
+            }
+            m.SetTriggerPatterns(res)
         }
         return nil
     }
@@ -243,6 +308,11 @@ func (m *Stacks_attributes) GetName()(*string) {
 func (m *Stacks_attributes) GetOutputsCount()(*int32) {
     return m.outputsCount
 }
+// GetResourceCount gets the resource-count property value. The resourceCount property
+// returns a *int32 when successful
+func (m *Stacks_attributes) GetResourceCount()(*int32) {
+    return m.resourceCount
+}
 // GetSettingOverwrites gets the setting-overwrites property value. The settingOverwrites property
 // returns a Stacks_attributes_settingOverwritesable when successful
 func (m *Stacks_attributes) GetSettingOverwrites()(Stacks_attributes_settingOverwritesable) {
@@ -252,6 +322,12 @@ func (m *Stacks_attributes) GetSettingOverwrites()(Stacks_attributes_settingOver
 // returns a *bool when successful
 func (m *Stacks_attributes) GetSpeculativeEnabled()(*bool) {
     return m.speculativeEnabled
+}
+// GetTriggerPatterns gets the trigger-patterns property value. Deprecated. Use the trigger patterns on the stack's version control settings instead.
+// Deprecated: 
+// returns a []string when successful
+func (m *Stacks_attributes) GetTriggerPatterns()([]string) {
+    return m.triggerPatterns
 }
 // GetUpdatedAt gets the updated-at property value. The updatedAt property
 // returns a *Time when successful
@@ -334,6 +410,14 @@ func (m *Stacks_attributes) SetAdditionalData(value map[string]any)() {
 func (m *Stacks_attributes) SetCreatedAt(value *i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time)() {
     m.createdAt = value
 }
+// SetCreationSource sets the creation-source property value. The client that created the stack (e.g. the API client name), prefixed with `migration-` when the stack was created by a migration.
+func (m *Stacks_attributes) SetCreationSource(value *string)() {
+    m.creationSource = value
+}
+// SetDebuggingMode sets the debugging-mode property value. Whether debug logging is enabled for this stack's operations.
+func (m *Stacks_attributes) SetDebuggingMode(value *bool)() {
+    m.debuggingMode = value
+}
 // SetDeleteable sets the deleteable property value. The deleteable property
 func (m *Stacks_attributes) SetDeleteable(value *bool)() {
     m.deleteable = value
@@ -362,6 +446,10 @@ func (m *Stacks_attributes) SetName(value *string)() {
 func (m *Stacks_attributes) SetOutputsCount(value *int32)() {
     m.outputsCount = value
 }
+// SetResourceCount sets the resource-count property value. The resourceCount property
+func (m *Stacks_attributes) SetResourceCount(value *int32)() {
+    m.resourceCount = value
+}
 // SetSettingOverwrites sets the setting-overwrites property value. The settingOverwrites property
 func (m *Stacks_attributes) SetSettingOverwrites(value Stacks_attributes_settingOverwritesable)() {
     m.settingOverwrites = value
@@ -369,6 +457,11 @@ func (m *Stacks_attributes) SetSettingOverwrites(value Stacks_attributes_setting
 // SetSpeculativeEnabled sets the speculative-enabled property value. The speculativeEnabled property
 func (m *Stacks_attributes) SetSpeculativeEnabled(value *bool)() {
     m.speculativeEnabled = value
+}
+// SetTriggerPatterns sets the trigger-patterns property value. Deprecated. Use the trigger patterns on the stack's version control settings instead.
+// Deprecated: 
+func (m *Stacks_attributes) SetTriggerPatterns(value []string)() {
+    m.triggerPatterns = value
 }
 // SetUpdatedAt sets the updated-at property value. The updatedAt property
 func (m *Stacks_attributes) SetUpdatedAt(value *i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time)() {
@@ -390,6 +483,8 @@ type Stacks_attributesable interface {
     i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.AdditionalDataHolder
     i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.Parsable
     GetCreatedAt()(*i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time)
+    GetCreationSource()(*string)
+    GetDebuggingMode()(*bool)
     GetDeleteable()(*bool)
     GetDescription()(*string)
     GetDownstreamCount()(*int32)
@@ -397,13 +492,17 @@ type Stacks_attributesable interface {
     GetInputsCount()(*int32)
     GetName()(*string)
     GetOutputsCount()(*int32)
+    GetResourceCount()(*int32)
     GetSettingOverwrites()(Stacks_attributes_settingOverwritesable)
     GetSpeculativeEnabled()(*bool)
+    GetTriggerPatterns()([]string)
     GetUpdatedAt()(*i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time)
     GetUpstreamCount()(*int32)
     GetVcsRepo()(Stacks_attributes_vcsRepoable)
     GetWorkingDirectory()(*string)
     SetCreatedAt(value *i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time)()
+    SetCreationSource(value *string)()
+    SetDebuggingMode(value *bool)()
     SetDeleteable(value *bool)()
     SetDescription(value *string)()
     SetDownstreamCount(value *int32)()
@@ -411,8 +510,10 @@ type Stacks_attributesable interface {
     SetInputsCount(value *int32)()
     SetName(value *string)()
     SetOutputsCount(value *int32)()
+    SetResourceCount(value *int32)()
     SetSettingOverwrites(value Stacks_attributes_settingOverwritesable)()
     SetSpeculativeEnabled(value *bool)()
+    SetTriggerPatterns(value []string)()
     SetUpdatedAt(value *i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time)()
     SetUpstreamCount(value *int32)()
     SetVcsRepo(value Stacks_attributes_vcsRepoable)()
