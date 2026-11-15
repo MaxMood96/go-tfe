@@ -7,6 +7,7 @@ import (
     "context"
     i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f "github.com/microsoft/kiota-abstractions-go"
     i05d5aa6b14db285c2e8df48c915f7a7082b77b17cca0def522e18528f80bec16 "github.com/hashicorp/go-tfe/v2/api/models"
+    ic137be8a5e75ec616f0b09953984e7eba8a829ecdb0b3c53d02faf36cb79a913 "github.com/hashicorp/go-tfe/v2/api/agentpools/item"
 )
 
 // WithAgent_pool_ItemRequestBuilder builds and executes requests for operations under \agent-pools\{agent_pool_id}
@@ -17,6 +18,8 @@ type WithAgent_pool_ItemRequestBuilder struct {
 type WithAgent_pool_ItemRequestBuilderGetQueryParameters struct {
     // Return only the specified fields for agent-pools resource(s) in the response. Use underscores for identifiers that contain a dash: For example, auto_apply instead of auto-apply. An empty value indicates that no fields should be returned.
     FieldsagentPools []string "uriparametername:\"fields%5Bagent%2Dpools%5D\""
+    // Optionally side-load the specified relationships.
+    Include []ic137be8a5e75ec616f0b09953984e7eba8a829ecdb0b3c53d02faf36cb79a913.GetIncludeQueryParameterType "uriparametername:\"include\""
 }
 // Agents the agents property
 // returns a *ItemAgentsRequestBuilder when successful
@@ -31,7 +34,7 @@ func (m *WithAgent_pool_ItemRequestBuilder) AuthenticationTokens()(*ItemAuthenti
 // NewWithAgent_pool_ItemRequestBuilderInternal instantiates a new WithAgent_pool_ItemRequestBuilder and sets the default values.
 func NewWithAgent_pool_ItemRequestBuilderInternal(pathParameters map[string]string, requestAdapter i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.RequestAdapter)(*WithAgent_pool_ItemRequestBuilder) {
     m := &WithAgent_pool_ItemRequestBuilder{
-        BaseRequestBuilder: *i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.NewBaseRequestBuilder(requestAdapter, "{+baseurl}/agent-pools/{agent_pool_id}{?fields%5Bagent%2Dpools%5D}", pathParameters),
+        BaseRequestBuilder: *i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.NewBaseRequestBuilder(requestAdapter, "{+baseurl}/agent-pools/{agent_pool_id}{?fields%5Bagent%2Dpools%5D,include}", pathParameters),
     }
     return m
 }
@@ -77,8 +80,9 @@ func (m *WithAgent_pool_ItemRequestBuilder) Get(ctx context.Context, requestConf
     }
     return res.(i05d5aa6b14db285c2e8df48c915f7a7082b77b17cca0def522e18528f80bec16.AgentPoolsEnvelopeable), nil
 }
-// Patch update an agent pool
+// Patch update an agent pool. Project access cannot be removed while workspaces using the pool rely on that project grant. Preserve direct workspace access or organization-wide access, or reassign the affected workspaces first.
 // returns a AgentPoolsEnvelopeable when successful
+// returns a Errors error when the service returns a 422 status code
 // returns a Errors error when the service returns a 4XX or 5XX status code
 func (m *WithAgent_pool_ItemRequestBuilder) Patch(ctx context.Context, body i05d5aa6b14db285c2e8df48c915f7a7082b77b17cca0def522e18528f80bec16.AgentPoolsEnvelopeable, requestConfiguration *i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.RequestConfiguration[i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.DefaultQueryParameters])(i05d5aa6b14db285c2e8df48c915f7a7082b77b17cca0def522e18528f80bec16.AgentPoolsEnvelopeable, error) {
     requestInfo, err := m.ToPatchRequestInformation(ctx, body, requestConfiguration);
@@ -86,6 +90,7 @@ func (m *WithAgent_pool_ItemRequestBuilder) Patch(ctx context.Context, body i05d
         return nil, err
     }
     errorMapping := i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.ErrorMappings {
+        "422": i05d5aa6b14db285c2e8df48c915f7a7082b77b17cca0def522e18528f80bec16.CreateErrorsFromDiscriminatorValue,
         "XXX": i05d5aa6b14db285c2e8df48c915f7a7082b77b17cca0def522e18528f80bec16.CreateErrorsFromDiscriminatorValue,
     }
     res, err := m.BaseRequestBuilder.RequestAdapter.Send(ctx, requestInfo, i05d5aa6b14db285c2e8df48c915f7a7082b77b17cca0def522e18528f80bec16.CreateAgentPoolsEnvelopeFromDiscriminatorValue, errorMapping)
@@ -113,7 +118,7 @@ func (m *WithAgent_pool_ItemRequestBuilder) ToGetRequestInformation(ctx context.
     requestInfo.Headers.TryAdd("Accept", "application/vnd.api+json")
     return requestInfo, nil
 }
-// ToPatchRequestInformation update an agent pool
+// ToPatchRequestInformation update an agent pool. Project access cannot be removed while workspaces using the pool rely on that project grant. Preserve direct workspace access or organization-wide access, or reassign the affected workspaces first.
 // returns a *RequestInformation when successful
 func (m *WithAgent_pool_ItemRequestBuilder) ToPatchRequestInformation(ctx context.Context, body i05d5aa6b14db285c2e8df48c915f7a7082b77b17cca0def522e18528f80bec16.AgentPoolsEnvelopeable, requestConfiguration *i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.RequestConfiguration[i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.DefaultQueryParameters])(*i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.RequestInformation, error) {
     requestInfo := i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.NewRequestInformationWithMethodAndUrlTemplateAndPathParameters(i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.PATCH, m.BaseRequestBuilder.UrlTemplate, m.BaseRequestBuilder.PathParameters)
