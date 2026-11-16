@@ -34,18 +34,48 @@ func NewAdminRequestBuilder(rawUrl string, requestAdapter i2ae4187f7daee263371cb
 func (m *AdminRequestBuilder) CustomizationSettings()(*CustomizationSettingsRequestBuilder) {
     return NewCustomizationSettingsRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
 }
+// GeneralSettings the generalSettings property
+// returns a *GeneralSettingsRequestBuilder when successful
+func (m *AdminRequestBuilder) GeneralSettings()(*GeneralSettingsRequestBuilder) {
+    return NewGeneralSettingsRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
+}
 // GithubAppInstallations the githubAppInstallations property
 // returns a *GithubAppInstallationsRequestBuilder when successful
 func (m *AdminRequestBuilder) GithubAppInstallations()(*GithubAppInstallationsRequestBuilder) {
     return NewGithubAppInstallationsRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
+}
+// InAppNotifications the inAppNotifications property
+// returns a *InAppNotificationsRequestBuilder when successful
+func (m *AdminRequestBuilder) InAppNotifications()(*InAppNotificationsRequestBuilder) {
+    return NewInAppNotificationsRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
 }
 // SamlSettings the samlSettings property
 // returns a *SamlSettingsRequestBuilder when successful
 func (m *AdminRequestBuilder) SamlSettings()(*SamlSettingsRequestBuilder) {
     return NewSamlSettingsRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
 }
+// ScimGroups the scimGroups property
+// returns a *ScimGroupsRequestBuilder when successful
+func (m *AdminRequestBuilder) ScimGroups()(*ScimGroupsRequestBuilder) {
+    return NewScimGroupsRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
+}
 // ScimSettings the scimSettings property
 // returns a *ScimSettingsRequestBuilder when successful
 func (m *AdminRequestBuilder) ScimSettings()(*ScimSettingsRequestBuilder) {
     return NewScimSettingsRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
+}
+// ScimTokens the scimTokens property
+// returns a *ScimTokensRequestBuilder when successful
+func (m *AdminRequestBuilder) ScimTokens()(*ScimTokensRequestBuilder) {
+    return NewScimTokensRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
+}
+// Teams the teams property
+// returns a *TeamsRequestBuilder when successful
+func (m *AdminRequestBuilder) Teams()(*TeamsRequestBuilder) {
+    return NewTeamsRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
+}
+// TfpolicyVersions the tfpolicyVersions property
+// returns a *TfpolicyVersionsRequestBuilder when successful
+func (m *AdminRequestBuilder) TfpolicyVersions()(*TfpolicyVersionsRequestBuilder) {
+    return NewTfpolicyVersionsRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
 }
