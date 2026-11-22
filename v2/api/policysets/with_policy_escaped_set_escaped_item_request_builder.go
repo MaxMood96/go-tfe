@@ -7,6 +7,7 @@ import (
     "context"
     i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f "github.com/microsoft/kiota-abstractions-go"
     i05d5aa6b14db285c2e8df48c915f7a7082b77b17cca0def522e18528f80bec16 "github.com/hashicorp/go-tfe/v2/api/models"
+    ib4032290f0e3b2e810de95e092424c16936fad4fe1b1b4fe84f7b7ac59592fb4 "github.com/hashicorp/go-tfe/v2/api/policysets/item"
 )
 
 // WithPolicy_set_ItemRequestBuilder builds and executes requests for operations under \policy-sets\{policy_set_id}
@@ -17,11 +18,20 @@ type WithPolicy_set_ItemRequestBuilder struct {
 type WithPolicy_set_ItemRequestBuilderGetQueryParameters struct {
     // Return only the specified fields for policy-sets resource(s) in the response. Use underscores for identifiers that contain a dash: For example, auto_apply instead of auto-apply. An empty value indicates that no fields should be returned.
     FieldspolicySets []string "uriparametername:\"fields%5Bpolicy%2Dsets%5D\""
+    // Available side-load related resources. Multiple values can be comma-separated.Project exclusion, stack, and stack exclusion relationship data is onlyreturned when included.Available includes:- `policies` - The policies in this policy set- `workspaces` - The workspaces this policy set is attached to- `workspace_exclusions` - The workspaces excluded from this policy set- `stacks` - The stacks this policy set is attached to (`tfpolicy` policy sets only)- `stack_exclusions` - The stacks excluded from this policy set (`tfpolicy` policy sets only)- `projects` - The projects this policy set is attached to- `project_exclusions` - The projects excluded from this policy set- `current_version` - The current policy set version- `newest_version` - The newest policy set version- `policies.ootb_policy` - The OOTB policy for each policy- `policies.ootb_policy.ootb_policy_libraries` - The OOTB policy libraries for each OOTB policy
+    Include []ib4032290f0e3b2e810de95e092424c16936fad4fe1b1b4fe84f7b7ac59592fb4.GetIncludeQueryParameterType "uriparametername:\"include\""
+    // If true and the actor is authorized for update metadata, everysideloaded policy on this set (regardless of any other filter) gainsa nullable `ootb-update` attribute; `policy-count` is unaffected.Default response shape is unchanged and no availability query runswhen omitted. Unlike index, show never adds an aggregate meta object.When OOTB policy updates are unavailable for the organization, thisparameter is ignored: the default response shape is unchanged, no`ootb-update` attributes are added, and no availability query runs.
+    IncludeOotbUpdate *bool "uriparametername:\"include%2Dootb%2Dupdate\""
+}
+// Actions the actions property
+// returns a *ItemActionsRequestBuilder when successful
+func (m *WithPolicy_set_ItemRequestBuilder) Actions()(*ItemActionsRequestBuilder) {
+    return NewItemActionsRequestBuilderInternal(m.BaseRequestBuilder.PathParameters, m.BaseRequestBuilder.RequestAdapter)
 }
 // NewWithPolicy_set_ItemRequestBuilderInternal instantiates a new WithPolicy_set_ItemRequestBuilder and sets the default values.
 func NewWithPolicy_set_ItemRequestBuilderInternal(pathParameters map[string]string, requestAdapter i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.RequestAdapter)(*WithPolicy_set_ItemRequestBuilder) {
     m := &WithPolicy_set_ItemRequestBuilder{
-        BaseRequestBuilder: *i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.NewBaseRequestBuilder(requestAdapter, "{+baseurl}/policy-sets/{policy_set_id}{?fields%5Bpolicy%2Dsets%5D}", pathParameters),
+        BaseRequestBuilder: *i2ae4187f7daee263371cb1c977df639813ab50ffa529013b7437480d1ec0158f.NewBaseRequestBuilder(requestAdapter, "{+baseurl}/policy-sets/{policy_set_id}{?fields%5Bpolicy%2Dsets%5D,include,include%2Dootb%2Dupdate*}", pathParameters),
     }
     return m
 }
