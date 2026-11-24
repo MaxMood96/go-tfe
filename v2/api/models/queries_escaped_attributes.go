@@ -21,17 +21,17 @@ type Queries_attributes struct {
     forceCancelAvailableAt *i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time
     // The generateConfigOut property
     generateConfigOut *bool
+    // Per-list-block result summaries. Only present on the show endpoint.
+    listCompletions []Queries_attributes_listCompletionsable
     // The logReadUrl property
     logReadUrl *string
     // The permissions property
     permissions Queries_attributes_permissionsable
-    // Opts this query into policy evaluation. When query-policy-opt-in is enabled, omitted input defaults to true only for tfe-ui queries with generate-config-out enabled (which defaults to true); otherwise it defaults to false. Explicit true requires a UI source and generated configuration. Explicit false opts out. Supplied input must be a non-null boolean when the feature is enabled. When the feature is disabled, this input is ignored and false is persisted.
-    policyEvaluationOptIn *bool
     // The policyPaths property
     policyPaths []string
     // The number of resources discovered by the query run.
     resourcesDiscovered *int32
-    // The source property
+    // The query source. Requests with the X-Terraform-Integration header set to cloud are stored and returned with source terraform, overriding the submitted source. Terraform CLI 1.14 sends this header with source tfe-api.
     source *Queries_attributes_source
     // The status property
     status *Queries_attributes_status
@@ -39,6 +39,8 @@ type Queries_attributes struct {
     statusTimestamps Queries_attributes_statusTimestampsable
     // The updatedAt property
     updatedAt *i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time
+    // Run variables supplied for the query.
+    variables []Queries_attributes_variablesable
 }
 // NewQueries_attributes instantiates a new Queries_attributes and sets the default values.
 func NewQueries_attributes()(*Queries_attributes) {
@@ -126,6 +128,22 @@ func (m *Queries_attributes) GetFieldDeserializers()(map[string]func(i878a80d233
         }
         return nil
     }
+    res["list-completions"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
+        val, err := n.GetCollectionOfObjectValues(CreateQueries_attributes_listCompletionsFromDiscriminatorValue)
+        if err != nil {
+            return err
+        }
+        if val != nil {
+            res := make([]Queries_attributes_listCompletionsable, len(val))
+            for i, v := range val {
+                if v != nil {
+                    res[i] = v.(Queries_attributes_listCompletionsable)
+                }
+            }
+            m.SetListCompletions(res)
+        }
+        return nil
+    }
     res["log-read-url"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
         val, err := n.GetStringValue()
         if err != nil {
@@ -143,16 +161,6 @@ func (m *Queries_attributes) GetFieldDeserializers()(map[string]func(i878a80d233
         }
         if val != nil {
             m.SetPermissions(val.(Queries_attributes_permissionsable))
-        }
-        return nil
-    }
-    res["policy-evaluation-opt-in"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
-        val, err := n.GetBoolValue()
-        if err != nil {
-            return err
-        }
-        if val != nil {
-            m.SetPolicyEvaluationOptIn(val)
         }
         return nil
     }
@@ -222,6 +230,22 @@ func (m *Queries_attributes) GetFieldDeserializers()(map[string]func(i878a80d233
         }
         return nil
     }
+    res["variables"] = func (n i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.ParseNode) error {
+        val, err := n.GetCollectionOfObjectValues(CreateQueries_attributes_variablesFromDiscriminatorValue)
+        if err != nil {
+            return err
+        }
+        if val != nil {
+            res := make([]Queries_attributes_variablesable, len(val))
+            for i, v := range val {
+                if v != nil {
+                    res[i] = v.(Queries_attributes_variablesable)
+                }
+            }
+            m.SetVariables(res)
+        }
+        return nil
+    }
     return res
 }
 // GetForceCancelAvailableAt gets the force-cancel-available-at property value. The forceCancelAvailableAt property
@@ -234,6 +258,11 @@ func (m *Queries_attributes) GetForceCancelAvailableAt()(*i336074805fc853987abe6
 func (m *Queries_attributes) GetGenerateConfigOut()(*bool) {
     return m.generateConfigOut
 }
+// GetListCompletions gets the list-completions property value. Per-list-block result summaries. Only present on the show endpoint.
+// returns a []Queries_attributes_listCompletionsable when successful
+func (m *Queries_attributes) GetListCompletions()([]Queries_attributes_listCompletionsable) {
+    return m.listCompletions
+}
 // GetLogReadUrl gets the log-read-url property value. The logReadUrl property
 // returns a *string when successful
 func (m *Queries_attributes) GetLogReadUrl()(*string) {
@@ -243,11 +272,6 @@ func (m *Queries_attributes) GetLogReadUrl()(*string) {
 // returns a Queries_attributes_permissionsable when successful
 func (m *Queries_attributes) GetPermissions()(Queries_attributes_permissionsable) {
     return m.permissions
-}
-// GetPolicyEvaluationOptIn gets the policy-evaluation-opt-in property value. Opts this query into policy evaluation. When query-policy-opt-in is enabled, omitted input defaults to true only for tfe-ui queries with generate-config-out enabled (which defaults to true); otherwise it defaults to false. Explicit true requires a UI source and generated configuration. Explicit false opts out. Supplied input must be a non-null boolean when the feature is enabled. When the feature is disabled, this input is ignored and false is persisted.
-// returns a *bool when successful
-func (m *Queries_attributes) GetPolicyEvaluationOptIn()(*bool) {
-    return m.policyEvaluationOptIn
 }
 // GetPolicyPaths gets the policy-paths property value. The policyPaths property
 // returns a []string when successful
@@ -259,7 +283,7 @@ func (m *Queries_attributes) GetPolicyPaths()([]string) {
 func (m *Queries_attributes) GetResourcesDiscovered()(*int32) {
     return m.resourcesDiscovered
 }
-// GetSource gets the source property value. The source property
+// GetSource gets the source property value. The query source. Requests with the X-Terraform-Integration header set to cloud are stored and returned with source terraform, overriding the submitted source. Terraform CLI 1.14 sends this header with source tfe-api.
 // returns a *Queries_attributes_source when successful
 func (m *Queries_attributes) GetSource()(*Queries_attributes_source) {
     return m.source
@@ -279,6 +303,11 @@ func (m *Queries_attributes) GetStatusTimestamps()(Queries_attributes_statusTime
 func (m *Queries_attributes) GetUpdatedAt()(*i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time) {
     return m.updatedAt
 }
+// GetVariables gets the variables property value. Run variables supplied for the query.
+// returns a []Queries_attributes_variablesable when successful
+func (m *Queries_attributes) GetVariables()([]Queries_attributes_variablesable) {
+    return m.variables
+}
 // Serialize serializes information the current object
 func (m *Queries_attributes) Serialize(writer i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.SerializationWriter)(error) {
     {
@@ -295,12 +324,6 @@ func (m *Queries_attributes) Serialize(writer i878a80d2330e89d26896388a3f487eef2
     }
     {
         err := writer.WriteObjectValue("permissions", m.GetPermissions())
-        if err != nil {
-            return err
-        }
-    }
-    {
-        err := writer.WriteBoolValue("policy-evaluation-opt-in", m.GetPolicyEvaluationOptIn())
         if err != nil {
             return err
         }
@@ -327,6 +350,18 @@ func (m *Queries_attributes) Serialize(writer i878a80d2330e89d26896388a3f487eef2
     }
     {
         err := writer.WriteObjectValue("status-timestamps", m.GetStatusTimestamps())
+        if err != nil {
+            return err
+        }
+    }
+    if m.GetVariables() != nil {
+        cast := make([]i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.Parsable, len(m.GetVariables()))
+        for i, v := range m.GetVariables() {
+            if v != nil {
+                cast[i] = v.(i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.Parsable)
+            }
+        }
+        err := writer.WriteCollectionOfObjectValues("variables", cast)
         if err != nil {
             return err
         }
@@ -363,6 +398,10 @@ func (m *Queries_attributes) SetForceCancelAvailableAt(value *i336074805fc853987
 func (m *Queries_attributes) SetGenerateConfigOut(value *bool)() {
     m.generateConfigOut = value
 }
+// SetListCompletions sets the list-completions property value. Per-list-block result summaries. Only present on the show endpoint.
+func (m *Queries_attributes) SetListCompletions(value []Queries_attributes_listCompletionsable)() {
+    m.listCompletions = value
+}
 // SetLogReadUrl sets the log-read-url property value. The logReadUrl property
 func (m *Queries_attributes) SetLogReadUrl(value *string)() {
     m.logReadUrl = value
@@ -370,10 +409,6 @@ func (m *Queries_attributes) SetLogReadUrl(value *string)() {
 // SetPermissions sets the permissions property value. The permissions property
 func (m *Queries_attributes) SetPermissions(value Queries_attributes_permissionsable)() {
     m.permissions = value
-}
-// SetPolicyEvaluationOptIn sets the policy-evaluation-opt-in property value. Opts this query into policy evaluation. When query-policy-opt-in is enabled, omitted input defaults to true only for tfe-ui queries with generate-config-out enabled (which defaults to true); otherwise it defaults to false. Explicit true requires a UI source and generated configuration. Explicit false opts out. Supplied input must be a non-null boolean when the feature is enabled. When the feature is disabled, this input is ignored and false is persisted.
-func (m *Queries_attributes) SetPolicyEvaluationOptIn(value *bool)() {
-    m.policyEvaluationOptIn = value
 }
 // SetPolicyPaths sets the policy-paths property value. The policyPaths property
 func (m *Queries_attributes) SetPolicyPaths(value []string)() {
@@ -383,7 +418,7 @@ func (m *Queries_attributes) SetPolicyPaths(value []string)() {
 func (m *Queries_attributes) SetResourcesDiscovered(value *int32)() {
     m.resourcesDiscovered = value
 }
-// SetSource sets the source property value. The source property
+// SetSource sets the source property value. The query source. Requests with the X-Terraform-Integration header set to cloud are stored and returned with source terraform, overriding the submitted source. Terraform CLI 1.14 sends this header with source tfe-api.
 func (m *Queries_attributes) SetSource(value *Queries_attributes_source)() {
     m.source = value
 }
@@ -399,6 +434,10 @@ func (m *Queries_attributes) SetStatusTimestamps(value Queries_attributes_status
 func (m *Queries_attributes) SetUpdatedAt(value *i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time)() {
     m.updatedAt = value
 }
+// SetVariables sets the variables property value. Run variables supplied for the query.
+func (m *Queries_attributes) SetVariables(value []Queries_attributes_variablesable)() {
+    m.variables = value
+}
 type Queries_attributesable interface {
     i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.AdditionalDataHolder
     i878a80d2330e89d26896388a3f487eef27b0a0e6c010c493bf80be1452208f91.Parsable
@@ -407,27 +446,29 @@ type Queries_attributesable interface {
     GetCreatedAt()(*i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time)
     GetForceCancelAvailableAt()(*i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time)
     GetGenerateConfigOut()(*bool)
+    GetListCompletions()([]Queries_attributes_listCompletionsable)
     GetLogReadUrl()(*string)
     GetPermissions()(Queries_attributes_permissionsable)
-    GetPolicyEvaluationOptIn()(*bool)
     GetPolicyPaths()([]string)
     GetResourcesDiscovered()(*int32)
     GetSource()(*Queries_attributes_source)
     GetStatus()(*Queries_attributes_status)
     GetStatusTimestamps()(Queries_attributes_statusTimestampsable)
     GetUpdatedAt()(*i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time)
+    GetVariables()([]Queries_attributes_variablesable)
     SetActions(value Queries_attributes_actionsable)()
     SetCanceledAt(value *i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time)()
     SetCreatedAt(value *i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time)()
     SetForceCancelAvailableAt(value *i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time)()
     SetGenerateConfigOut(value *bool)()
+    SetListCompletions(value []Queries_attributes_listCompletionsable)()
     SetLogReadUrl(value *string)()
     SetPermissions(value Queries_attributes_permissionsable)()
-    SetPolicyEvaluationOptIn(value *bool)()
     SetPolicyPaths(value []string)()
     SetResourcesDiscovered(value *int32)()
     SetSource(value *Queries_attributes_source)()
     SetStatus(value *Queries_attributes_status)()
     SetStatusTimestamps(value Queries_attributes_statusTimestampsable)()
     SetUpdatedAt(value *i336074805fc853987abe6f7fe3ad97a6a6f3077a16391fec744f671a015fbd7e.Time)()
+    SetVariables(value []Queries_attributes_variablesable)()
 }
